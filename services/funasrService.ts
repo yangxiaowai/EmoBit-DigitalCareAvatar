@@ -114,7 +114,27 @@ export class FunASRService {
     }
 
     /**
-     * 停止语音识别
+     * 立即停止麦克风采集（释放麦克风），不关 WebSocket，便于后续仍可收最终结果
+     */
+    private stopAudioCaptureOnly(): void {
+        if (this.processor) {
+            try {
+                this.processor.disconnect();
+            } catch (_) { /* ignore */ }
+            this.processor = null;
+        }
+        if (this.mediaStream) {
+            this.mediaStream.getTracks().forEach(track => track.stop());
+            this.mediaStream = null;
+        }
+        if (this.audioContext) {
+            this.audioContext.close().catch(() => {});
+            this.audioContext = null;
+        }
+    }
+
+    /**
+     * 停止语音识别：先立即释放麦克风，再发停止命令并等待最终结果后清理连接
      */
     stopRecognition(): void {
         if (!this.isRecording) {
@@ -125,7 +145,9 @@ export class FunASRService {
         console.log('[FunASR] 正在停止识别...');
         this.isRecording = false;
 
-        // 发送停止命令（在清理之前）
+        // 立即停止麦克风采集，松开即释放麦克风
+        this.stopAudioCaptureOnly();
+
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             console.log('[FunASR] 发送停止命令到服务器，等待最终结果...');
             try {
@@ -133,37 +155,22 @@ export class FunASRService {
             } catch (error) {
                 console.error('[FunASR] ❌ 发送停止命令失败:', error);
             }
-            
-            // 设置一个标志，表示正在等待最终结果
+
             this.waitingForFinal = true;
-            
-            // 清除之前的超时定时器（如果有）
             if (this.finalResultTimeout) {
                 clearTimeout(this.finalResultTimeout);
             }
-            
-            // 等待更长时间让服务器处理并发送最终结果
-            // 服务器处理音频可能需要5-10秒（特别是长音频），所以增加等待时间
             this.finalResultTimeout = setTimeout(() => {
                 if (this.waitingForFinal) {
-                    console.warn('[FunASR] ⚠️ 等待最终结果超时（10秒），清理连接');
-                    console.warn('[FunASR] 提示：如果音频较长，服务器可能需要更多时间处理');
                     this.waitingForFinal = false;
-                    // 延迟清理，给服务器更多时间
-                    setTimeout(() => {
-                        this.cleanup();
-                    }, 2000); // 再等2秒
-                } else {
-                    // 已经收到最终结果，清理会在收到最终结果后自动触发
-                    console.log('[FunASR] ✅ 已收到最终结果，清理将在收到结果后自动触发');
+                    this.cleanup();
                 }
-            }, 10000); // 等待 10 秒，给服务器足够时间处理长音频
+            }, 10000);
         } else {
-            console.warn('[FunASR] WebSocket 未连接，无法发送停止命令');
             this.cleanup();
         }
 
-        console.log('[FunASR] ✅ 停止命令已发送');
+        console.log('[FunASR] ✅ 已停止采集并发送停止命令');
     }
 
     /**

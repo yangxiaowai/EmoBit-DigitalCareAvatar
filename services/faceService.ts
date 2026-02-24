@@ -4,6 +4,10 @@ export interface FaceData {
     relation: string;
     imageUrl: string;
     description?: string;
+    /** 联系方式，介绍完身份后播报，帮助老人联系 */
+    contact?: string;
+    /** 与老人相关的小故事，帮助老人回忆 */
+    story?: string;
     createdAt: number;
 }
 

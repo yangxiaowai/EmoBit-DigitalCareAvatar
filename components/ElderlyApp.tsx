@@ -509,103 +509,115 @@ const ARNavigationFlow = ({ step, routeData, destination = '天安门广场' }: 
     );
 };
 
-// 2. Medication Guide Scenario (Detailed CV Flow)
-const MedicationFlow = ({ step }: { step: number }) => {
-    // Step 0: Scan Prompt -> Step 1: Scanning -> Step 2: Identified -> Step 3: Action -> Step 4: Check Hand -> Step 5: Swallow Check
-    const scanImage = "https://images.unsplash.com/photo-1628771065518-0d82f1938462?q=80&w=800&auto=format&fit=crop"; // Medicine Box
-    const handImage = "https://images.unsplash.com/photo-1550572017-edd951aa8f72?q=80&w=800&auto=format&fit=crop"; // Pills in hand
-    const drinkingImage = "https://images.unsplash.com/photo-1543506987-a2e6669c5e53?q=80&w=800&auto=format&fit=crop"; // Drinking water
+// 2. 吃药引导：仅识别药盒 + 按家属端设置的服用数量和次数语音播报
+const MedicationFlow = ({ step, onClose }: { step: number; onClose: () => void }) => {
+    const [hasSpoken, setHasSpoken] = useState(false);
+    // Step 0: 请拿出药盒 -> Step 1: 正在识别 -> Step 2: 识别成功 + 语音播报（家属端设置的用量、次数、时间）
+    // 使用本地药盒识别照片：public/medication/盐酸奥司他韦.jpg（来自 EmoBit照片/药盒识别）
+    const scanImage = "/medication/盐酸奥司他韦.jpg";
+    const meds = medicationService.getMedications();
+    const med = meds[0] || {
+        name: '盐酸奥司他韦',
+        dosage: '75mg，1粒',
+        frequency: '每日2次',
+        times: ['08:00', '20:00'],
+        instructions: '与食物同服，用温水送服',
+    };
+
+    useEffect(() => {
+        if (step === 2 && !hasSpoken) {
+            setHasSpoken(true);
+            const timesStr = med.times && med.times.length > 0
+                ? med.times.map(t => t.replace(':', '点')).join('、')
+                : '按家属设置的时间';
+            const text = `这是${med.name}。家属为您设置的服用方式是：每次${med.dosage}，${med.frequency}，服用时间是${timesStr}。${med.instructions ? med.instructions + '。' : ''}`;
+            VoiceService.speak(text, undefined, undefined, () => {}).catch(() => {});
+        }
+    }, [step, med.name, med.dosage, med.frequency, med.times, med.instructions, hasSpoken]);
+
+    useEffect(() => () => VoiceService.stop(), []);
 
     let state = { text: "", sub: "", img: scanImage, overlay: null as React.ReactNode };
 
     if (step === 0) {
         state = {
-            text: "请拿出药盒", sub: "将药盒正面放入框内", img: scanImage,
-            overlay: <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border-2 border-white/50 rounded-2xl flex items-center justify-center"><ScanLine className="text-white opacity-50" size={32} /></div>
+            text: "请拿出药盒",
+            sub: "将药盒正面放入框内",
+            img: scanImage,
+            overlay: (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border-2 border-white/50 rounded-2xl flex items-center justify-center">
+                    <ScanLine className="text-white opacity-50" size={32} />
+                </div>
+            ),
         };
     } else if (step === 1) {
         state = {
-            text: "正在识别...", sub: "保持药盒稳定", img: scanImage,
-            overlay: <div className="absolute inset-12 border-2 border-indigo-400 rounded-xl animate-pulse flex items-center justify-center bg-indigo-500/10"><ScanLine className="text-indigo-400 w-full h-full opacity-80 animate-ping" /></div>
+            text: "正在识别...",
+            sub: "保持药盒稳定",
+            img: scanImage,
+            overlay: (
+                <div className="absolute inset-12 border-2 border-indigo-400 rounded-xl animate-pulse flex items-center justify-center bg-indigo-500/10">
+                    <ScanLine className="text-indigo-400 w-full h-full opacity-80 animate-ping" />
+                </div>
+            ),
         };
-    } else if (step === 2) {
+    } else {
         state = {
-            text: "识别成功：阿司匹林", sub: "100mg肠溶片", img: scanImage,
+            text: `识别成功：${med.name}`,
+            sub: `${med.dosage}，${med.frequency}`,
+            img: scanImage,
             overlay: (
                 <div className="absolute top-1/3 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-4 py-2 rounded-xl border border-emerald-500 shadow-lg flex items-center gap-2">
                     <CheckCircle size={16} className="text-emerald-500" />
                     <span className="font-bold text-slate-800">匹配处方</span>
                 </div>
-            )
-        };
-    } else if (step === 3) {
-        state = {
-            text: "请倒出 2 粒", sub: "放在手心让我看看", img: handImage,
-            overlay: <div className="absolute inset-0 flex items-center justify-center"><div className="w-48 h-48 border-2 border-dashed border-yellow-400 rounded-full animate-spin-slow opacity-50"></div></div>
-        };
-    } else if (step === 4) {
-        state = {
-            text: "数量正确 (2粒)", sub: "请准备温水送服", img: handImage,
-            overlay: (
-                <>
-                    <div className="absolute top-1/2 left-1/2 -translate-x-12 -translate-y-12 w-6 h-6 border-2 border-green-400 rounded-full"></div>
-                    <div className="absolute top-1/2 left-1/2 translate-x-4 -translate-y-8 w-6 h-6 border-2 border-green-400 rounded-full"></div>
-                    <div className="absolute bottom-1/3 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg">Count: 2</div>
-                </>
-            )
-        }
-    } else {
-        state = {
-            text: "检测服药动作", sub: "请正对摄像头吞咽", img: drinkingImage,
-            overlay: (
-                <div className="absolute inset-0">
-                    <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-40 h-40 border-2 border-indigo-400 rounded-full opacity-50"></div>
-                    <div className="absolute bottom-32 left-0 right-0 text-center">
-                        <div className="inline-flex items-center gap-2 bg-black/60 text-white px-3 py-1 rounded-full text-xs">
-                            <ScanFace size={12} /> 动作分析中...
-                        </div>
-                    </div>
-                </div>
-            )
+            ),
         };
     }
 
     return (
         <div className="absolute inset-0 z-50 bg-slate-900 flex flex-col animate-fade-in font-sans">
-            {/* Camera Feed Simulation */}
             <div className="flex-1 relative overflow-hidden bg-black">
                 <img src={state.img} className="w-full h-full object-cover opacity-90" alt="Camera" />
-
-                {/* Status Badges */}
                 <div className="absolute top-4 right-4 bg-black/50 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-mono flex items-center gap-2 border border-white/10">
                     <Camera size={12} className="text-red-500 animate-pulse" /> AI Vision Active
                 </div>
-
                 {state.overlay}
             </div>
 
-            {/* Interactive Guide Panel */}
             <div className="bg-white rounded-t-[2.5rem] p-8 -mt-6 relative z-10 shadow-[0_-10px_40px_rgba(0,0,0,0.2)]">
-                <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6"></div>
+                <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6" />
                 <div className="flex items-start gap-4">
-                    <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 transition-colors duration-300 ${step === 2 || step >= 4 ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                        {step >= 5 ? <CheckCircle size={28} /> : <Pill size={28} />}
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 transition-colors duration-300 ${step === 2 ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                        {step === 2 ? <CheckCircle size={28} /> : <Pill size={28} />}
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                         <h2 className="text-2xl font-black text-slate-800 mb-1">{state.text}</h2>
                         <p className="text-slate-500 font-bold flex items-center gap-2">
                             <Volume2 size={16} className="text-indigo-500" />
                             {state.sub}
                         </p>
+                        {step === 2 && med.times && med.times.length > 0 && (
+                            <p className="text-slate-600 text-sm mt-2">服用时间：{med.times.join('、')}</p>
+                        )}
                     </div>
                 </div>
 
-                {/* Progress Steps */}
-                <div className="flex gap-2 mt-8">
-                    {[0, 1, 2, 3, 4, 5].map(i => (
-                        <div key={i} className={`h-2 rounded-full flex-1 transition-all duration-500 ${i <= step ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
+                <div className="flex gap-2 mt-6">
+                    {[0, 1, 2].map((i) => (
+                        <div key={i} className={`h-2 rounded-full flex-1 transition-all duration-500 ${i <= step ? 'bg-indigo-600' : 'bg-slate-200'}`} />
                     ))}
                 </div>
+
+                {step === 2 && (
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="mt-6 w-full py-3.5 rounded-2xl bg-indigo-600 text-white font-bold text-base hover:bg-indigo-700 active:scale-[0.98] transition-all"
+                    >
+                        完成
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -621,9 +633,12 @@ const FaceRecognitionFlow = ({ step, onClose }: { step: number; onClose: () => v
     useEffect(() => {
         if (step === 3 && !hasSpoken) {
             setHasSpoken(true);
-            VoiceService.speak(face.description, undefined, undefined, () => {}).catch(() => {});
+            const identity = `张爷爷，这是您的${face.relation}${face.name ? ` ${face.name}` : ''}。`;
+            const contactAndStory = [face.contact, face.story].filter(Boolean).join(' ');
+            const fullText = contactAndStory ? `${identity}${face.description}。${contactAndStory}` : `${identity}${face.description}`;
+            VoiceService.speak(fullText, undefined, undefined, () => {}).catch(() => {});
         }
-    }, [step, face.description, hasSpoken]);
+    }, [step, face.description, face.relation, face.name, face.contact, face.story, hasSpoken]);
 
     useEffect(() => () => VoiceService.stop(), []);
 
@@ -692,7 +707,7 @@ const FaceRecognitionFlow = ({ step, onClose }: { step: number; onClose: () => v
                         <p className="text-sm text-white/80">识别成功</p>
                     </div>
                 </div>
-                <div className="bg-white/95 rounded-2xl p-6 w-full max-w-sm shadow-xl">
+                <div className="bg-white/95 rounded-2xl p-6 w-full max-w-sm shadow-xl max-h-[50vh] overflow-y-auto">
                     <div className="flex items-center gap-3 mb-4">
                         <CheckCircle size={32} className="text-emerald-500 shrink-0" />
                         <div>
@@ -700,7 +715,13 @@ const FaceRecognitionFlow = ({ step, onClose }: { step: number; onClose: () => v
                             <p className="text-slate-500 text-sm">正在为您播报...</p>
                         </div>
                     </div>
-                    <p className="text-slate-600 leading-relaxed">{face.description}</p>
+                    <p className="text-slate-600 leading-relaxed mb-3">{face.description}</p>
+                    {(face.contact || face.story) && (
+                        <div className="mt-3 pt-3 border-t border-slate-200 space-y-2 text-slate-600 text-sm">
+                            {face.contact && <p><span className="font-semibold text-indigo-600">联系：</span>{face.contact}</p>}
+                            {face.story && <p><span className="font-semibold text-amber-600">回忆：</span>{face.story}</p>}
+                        </div>
+                    )}
                 </div>
             </div>
             <button onClick={onClose} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center text-white z-10">
@@ -1144,6 +1165,10 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
     const finalResultTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const isProcessingRef = useRef<boolean>(false); // 防止重复处理
     const holdRecordingRef = useRef<boolean>(false); // 长按说话：是否由按住手势触发的录音
+    /** 长按延迟定时器：只有按住超过该时间才开麦，避免误触或一点就开麦 */
+    const holdStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    /** 是否已进入“长按录音”状态（已开麦），松开时仅在此为 true 时执行停止 */
+    const holdConfirmedRef = useRef<boolean>(false);
 
     // 整合识别结果：智能合并所有中间结果，选择最完整、最准确的句子
     const consolidateResults = useCallback((results: string[]): string => {
@@ -1273,9 +1298,25 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
             console.log('[ElderlyApp] ============================================================');
 
             // --- Voice Command Interception for Face Recognition ---
+            // 优先使用子女端添加的人脸；若未添加则使用预设配置（public/faces/）
+            const getFacesForRecognition = (): FaceData[] => {
+                const stored = faceService.getFaces();
+                if (stored.length > 0) return stored;
+                return FACE_RECOGNITION_CONFIG.map(c => ({
+                    id: c.file,
+                    name: c.name,
+                    relation: c.relation,
+                    imageUrl: `/faces/${c.file}`,
+                    description: c.description || '',
+                    contact: c.contact,
+                    story: c.story,
+                    createdAt: 0,
+                }));
+            };
+
             if (result.text.includes('人脸') || result.text.includes('认人') || result.text.includes('是谁') || result.text.includes('照片')) {
                 console.log('[ElderlyApp] 🛡️ 拦截到人脸识别指令');
-                const allFaces = faceService.getFaces();
+                const allFaces = getFacesForRecognition();
                 const reply = "好的，正在为您开启人脸识别。请将摄像头对准面前的人。";
 
                 setAiMessage(reply);
@@ -1290,44 +1331,12 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                     // Simulate recognition after 3 seconds if faces exist
                     if (allFaces.length > 0) {
                         setTimeout(() => {
-                            // Randomly pick one for simulation
                             const randomFace = allFaces[Math.floor(Math.random() * allFaces.length)];
                             setRecognizedFace(randomFace);
-                            VoiceService.speakSegments(`这是您的${randomFace.relation}，${randomFace.name}。`);
-                        }, 3000);
-                    } else {
-                        setTimeout(() => {
-                            VoiceService.speakSegments("相册中暂无照片，请让家属先要在后台添加照片哦。");
-                        }, 2000);
-                    }
-                });
-                setVoiceInputDisplay(null);
-                isProcessingRef.current = false;
-                return;
-            }
-            // -----------------------------------------------------
-
-            // --- Voice Command Interception for Face Recognition ---
-            if (result.text.includes('人脸') || result.text.includes('认人') || result.text.includes('是谁')) {
-                console.log('[ElderlyApp] 🛡️ 拦截到人脸识别指令');
-                const allFaces = faceService.getFaces();
-                const reply = "好的，正在为您开启人脸识别。请将摄像头对准面前的人。";
-
-                setAiMessage(reply);
-                setIsThinking(false);
-                setIsTalking(true);
-
-                VoiceService.speakSegments(reply, undefined, undefined, () => {
-                    setIsTalking(false);
-                    setShowFaceRecognition(true);
-
-                    // Simulate recognition after 3 seconds if faces exist
-                    if (allFaces.length > 0) {
-                        setTimeout(() => {
-                            // Randomly pick one for simulation
-                            const randomFace = allFaces[Math.floor(Math.random() * allFaces.length)];
-                            setRecognizedFace(randomFace);
-                            VoiceService.speakSegments(`这是您的${randomFace.relation}，${randomFace.name}。`);
+                            const identity = `这是您的${randomFace.relation}${randomFace.name ? `，${randomFace.name}` : ''}。`;
+                            const contactAndStory = [randomFace.contact, randomFace.story].filter(Boolean).join(' ');
+                            const fullText = contactAndStory ? `${identity}${contactAndStory}` : identity;
+                            VoiceService.speakSegments(fullText);
                         }, 3000);
                     } else {
                         setTimeout(() => {
@@ -1386,9 +1395,9 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                 console.warn('[ElderlyApp] ⚠️ 语音服务不可用，请确保 edge_tts_server 已启动');
             }
 
-            // 播放语音
+            // 播放语音：整段播放避免按句拆分导致“两个声音”
             try {
-                await VoiceService.speakSegments(
+                await VoiceService.speak(
                     response.text,
                     undefined,
                     undefined,
@@ -1610,6 +1619,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                     setSpeechError(error.message);
                     setIsRecording(false);
                     setIsListening(false);
+                    speechService.stopRecognition();
                 }
             );
         } catch (error) {
@@ -1620,15 +1630,33 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
         }
     }, [isRecording, handleSpeechResult]);
 
-    // 长按说话：按住开始录音，松开停止
+    // 长按说话：只有按住超过约 250ms 才开麦，松开立即停止，避免界面一直占用麦克风
+    const HOLD_DELAY_MS = 250;
     const handleHoldStart = useCallback(() => {
         holdRecordingRef.current = true;
-        if (!isRecording) toggleRecording();
+        holdConfirmedRef.current = false;
+        if (holdStartTimerRef.current) {
+            clearTimeout(holdStartTimerRef.current);
+            holdStartTimerRef.current = null;
+        }
+        holdStartTimerRef.current = setTimeout(() => {
+            holdStartTimerRef.current = null;
+            if (!holdRecordingRef.current) return; // 已松开，不再开麦
+            holdConfirmedRef.current = true;
+            if (!isRecording) toggleRecording();
+        }, HOLD_DELAY_MS);
     }, [isRecording, toggleRecording]);
 
     const handleHoldEnd = useCallback(() => {
+        if (holdStartTimerRef.current) {
+            clearTimeout(holdStartTimerRef.current);
+            holdStartTimerRef.current = null;
+        }
         if (!holdRecordingRef.current) return;
         holdRecordingRef.current = false;
+
+        if (!holdConfirmedRef.current) return; // 未超过长按时间，未开麦，无需停止
+        holdConfirmedRef.current = false;
 
         console.log('[ElderlyApp] 长按松开，停止录音');
         if (finalResultTimeoutRef.current) {
@@ -1697,13 +1725,28 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
         }, 600); // Reduced from 1500
     }, []);
 
-    // --- Logic: Scenario Auto-Progression (The 3-Second Rule) ---
+    // 录音中时：在文档上监听 pointerup/pointercancel，松开任意位置都会停止（防止滑出按钮未触发 onPointerUp）
+    useEffect(() => {
+        if (!isRecording) return;
+        const onDocPointerUp = () => handleHoldEnd();
+        document.addEventListener('pointerup', onDocPointerUp, true);
+        document.addEventListener('pointercancel', onDocPointerUp, true);
+        return () => {
+            document.removeEventListener('pointerup', onDocPointerUp, true);
+            document.removeEventListener('pointercancel', onDocPointerUp, true);
+        };
+    }, [isRecording, handleHoldEnd]);
+
+    // --- Logic: Scenario Auto-Progression (meds 只到 step 2 即识别+播报，不再往后) ---
     useEffect(() => {
         let interval: any;
         if (activeScenario !== 'none' && activeScenario !== 'memory') {
             interval = setInterval(() => {
-                setStep((prev) => prev + 1);
-            }, 3500); // 3.5s per step
+                setStep((prev) => {
+                    if (activeScenario === 'meds' && prev >= 2) return prev;
+                    return prev + 1;
+                });
+            }, 3500);
         }
         return () => clearInterval(interval);
     }, [activeScenario]);
@@ -1746,9 +1789,15 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                                 )}
 
                                 {recognizedFace && (
-                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm p-4 text-white animate-slide-up">
-                                        <h3 className="text-2xl font-bold mb-1">{recognizedFace.name}</h3>
+                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm p-4 text-white animate-slide-up max-h-[50%] overflow-y-auto">
+                                        <h3 className="text-2xl font-bold mb-1">{recognizedFace.name || recognizedFace.relation}</h3>
                                         <p className="text-lg text-indigo-300 font-bold">{recognizedFace.relation}</p>
+                                        {(recognizedFace.contact || recognizedFace.story) && (
+                                            <div className="mt-2 pt-2 border-t border-white/20 text-sm text-white/90 space-y-1">
+                                                {recognizedFace.contact && <p><span className="text-indigo-200">联系：</span>{recognizedFace.contact}</p>}
+                                                {recognizedFace.story && <p><span className="text-indigo-200">回忆：</span>{recognizedFace.story}</p>}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -1760,7 +1809,16 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
 
                 {/* --- SCENARIO LAYERS --- */}
                 {activeScenario === 'nav' && <ARNavigationFlow step={step} routeData={routeData} destination={navDestination} />}
-                {activeScenario === 'meds' && <MedicationFlow step={step} />}
+                {activeScenario === 'meds' && (
+                    <MedicationFlow
+                        step={Math.min(step, 2)}
+                        onClose={() => {
+                            VoiceService.stop();
+                            setActiveScenario('none');
+                            setStep(0);
+                        }}
+                    />
+                )}
                 {activeScenario === 'face' && (
                     <FaceRecognitionFlow
                         step={Math.min(step, 3)}
@@ -1882,6 +1940,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                                     onPointerDown={handleHoldStart}
                                     onPointerUp={handleHoldEnd}
                                     onPointerLeave={handleHoldEnd}
+                                    onPointerCancel={handleHoldEnd}
                                     onContextMenu={(e) => e.preventDefault()}
                                 >
                                     <span className="text-slate-600 font-medium text-lg">

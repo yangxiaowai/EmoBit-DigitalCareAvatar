@@ -143,7 +143,7 @@ class AIService {
             ],
             healthConditions: ['高血压', '轻度糖尿病'],
             medications: [
-                { name: '阿司匹林', dosage: '100mg', times: ['08:00'] },
+                { name: '盐酸奥司他韦', dosage: '75mg，1粒', times: ['08:00', '20:00'] },
                 { name: '二甲双胍', dosage: '500mg', times: ['08:00', '18:00'] },
             ],
             preferences: {
@@ -341,29 +341,9 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
             return { text: '好的，我来帮您导航。', shouldTriggerAction: 'nav' };
         }
 
-        // 药物相关 - 根据子女端设置的用药信息提醒按时按量
+        // 药物相关 - 用户问药/吃药/服药时直接提醒该吃盐酸奥司他韦
         if (lowerText.includes('药') || lowerText.includes('吃药') || lowerText.includes('服药') || lowerText.includes('用药') || lowerText.includes('怎么吃')) {
-            const nextMed = medicationService.getNextMedicationTime();
-            const meds = medicationService.getMedications();
-            const todayLogs = medicationService.getTodayLogs();
-            const nowTime = new Date().toTimeString().slice(0, 5);
-            if (meds.length === 0) {
-                return { text: '目前没有设置需要服用的药，您要是需要吃药可以跟家人说一声。', shouldTriggerAction: 'meds' };
-            }
-            if (nextMed) {
-                const { medication, time } = nextMed;
-                const taken = todayLogs.some(l => l.medicationId === medication.id && l.scheduledTime === time && l.status === 'taken');
-                if (taken) {
-                    const allSlots = meds.flatMap(m => m.times.map(t => ({ med: m, time: t }))).filter(s => s.time > nowTime).sort((a, b) => a.time.localeCompare(b.time));
-                    const nextOther = allSlots[0];
-                    if (nextOther) {
-                        return { text: `您${time}的${medication.name}已经记上了。下次是${nextOther.time}吃${nextOther.med.name}，${nextOther.med.dosage}，${nextOther.med.instructions}。`, shouldTriggerAction: 'meds' };
-                    }
-                    return { text: '您今天的药都记上了，记得多喝水哦。', shouldTriggerAction: 'meds' };
-                }
-                return { text: `该吃${medication.name}了。${medication.dosage}，${medication.instructions}。记得按时吃哦。`, shouldTriggerAction: 'meds' };
-            }
-            return { text: `您今天计划内的药都提醒过了。当前设置的有：${meds.map(m => m.name).join('、')}，按设置的时间服用即可。`, shouldTriggerAction: 'meds' };
+            return { text: '该吃盐酸奥司他韦了。', shouldTriggerAction: 'meds' };
         }
 
         // 人脸识别相关 - 老人不记得/不认识某人时触发

@@ -68,7 +68,7 @@ const App: React.FC = () => {
               <Activity className="text-white w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-slate-800 tracking-tight">EmoBit <span className="text-slate-400 font-light">| 智护中心</span></h1>
+              <h1 className="text-lg font-bold text-slate-800 tracking-tight">MemoLink <span className="text-slate-400 font-light">忆联</span></h1>
             </div>
           </div>
 

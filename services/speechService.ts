@@ -1,19 +1,10 @@
 /**
- * 语音识别服务 - 仅使用 FunASR
- * 
- * 要求：
- * - 必须运行 FunASR 服务器（ws://localhost:10095）
- * - 不依赖浏览器 API，兼容所有浏览器
- * 
- * 优势：
- * - 中文识别准确率更高
- * - 支持离线运行（本地部署）
- * - 可自定义模型和优化
- * - 不依赖浏览器兼容性
+ * 语音识别服务 - 直接使用浏览器 Web Speech API
+ *
+ * - 使用浏览器内置语音识别（Chrome/Edge 等）
+ * - 无需 FunASR 或其它后端
+ * - 需麦克风权限与网络（云端识别）
  */
-
-import { funasrService, FunASRResult } from './funasrService';
-import { USE_MOCK_API } from './api';
 
 export interface SpeechRecognitionResult {
     text: string;
@@ -30,20 +21,15 @@ export class SpeechRecognitionService {
     private onError: OnErrorCallback | null = null;
 
     /**
-     * 检查 FunASR 服务是否可用
+     * 检查浏览器是否支持语音识别
      */
     async checkConnection(): Promise<boolean> {
-        if (USE_MOCK_API) {
-            // Check if browser supports speech recognition
-            const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-            return !!SpeechRecognition;
-        }
-        return await funasrService.checkConnection();
+        const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+        return !!SpeechRecognition;
     }
 
     /**
-     * 开始语音识别
-     * 仅使用 FunASR 服务
+     * 开始语音识别（直接使用浏览器 Web Speech API）
      */
     async startRecognition(
         onResult: OnResultCallback,
@@ -57,102 +43,25 @@ export class SpeechRecognitionService {
         this.onResult = onResult;
         this.onError = onError || null;
 
-        if (USE_MOCK_API) {
-            console.log('[SpeechService] Using Browser Speech Recognition (Mock Mode)');
-            this.startBrowserRecognition(onResult, onError);
-            return;
-        }
-
-        // 检查 FunASR 服务是否可用
-        const funasrAvailable = await funasrService.checkConnection();
-        if (!funasrAvailable) {
-            // FunASR 不可用时，回退到浏览器云端语音识别
-            console.warn('[SpeechService] FunASR 不可用，使用浏览器云端语音识别');
-            this.startBrowserRecognition(onResult, onError);
-            return;
-        }
-
-        try {
-            console.log('[SpeechService] ============================================================');
-            console.log('[SpeechService] 准备启动 FunASR 识别...');
-            console.log('[SpeechService] onResult 回调:', this.onResult ? '✅ 已设置' : '❌ 未设置');
-            console.log('[SpeechService] ============================================================');
-
-            await funasrService.startRecognition(
-                (result: FunASRResult) => {
-                    // 详细日志
-                    console.log('[SpeechService] ============================================================');
-                    console.log('[SpeechService] 📥 收到 FunASR 识别结果:', {
-                        text: result.text,
-                        isFinal: result.isFinal,
-                    });
-                    console.log('[SpeechService] ============================================================');
-
-                    // 转换 FunASR 结果格式
-                    const speechResult = {
-                        text: result.text,
-                        isFinal: result.isFinal,
-                        confidence: undefined, // FunASR 不提供置信度
-                    };
-
-                    // 输出到控制台，方便调试
-                    if (speechResult.isFinal && speechResult.text) {
-                        console.log('='.repeat(60));
-                        console.log(`[SpeechService] ✅ 最终识别结果: "${speechResult.text}"`);
-                        console.log(`[SpeechService] 准备传递给上层回调...`);
-                        console.log('='.repeat(60));
-                    }
-
-                    // 检查回调是否存在
-                    if (!this.onResult) {
-                        console.error('[SpeechService] ❌ onResult 回调未设置！无法传递结果');
-                    } else {
-                        console.log(`[SpeechService] 调用上层 onResult 回调...`);
-                        try {
-                            this.onResult(speechResult);
-                            console.log(`[SpeechService] ✅ 上层回调已调用`);
-                        } catch (error) {
-                            console.error('[SpeechService] ❌ 上层回调执行失败:', error);
-                        }
-                    }
-                },
-                (error: Error) => {
-                    console.error('[SpeechService] ❌ 识别错误:', error);
-                    this.onError?.(error);
-                }
-            );
-            this.isRecording = true;
-            console.log('[SpeechService] ✅ 使用 FunASR 开始识别');
-        } catch (error) {
-            const err = error instanceof Error ? error : new Error('FunASR 启动失败');
-            console.error('[SpeechService] ❌ 启动失败:', err);
-            this.onError?.(err);
-            this.isRecording = false;
-            throw err;
-        }
+        console.log('[SpeechService] 使用浏览器语音识别');
+        this.startBrowserRecognition(onResult, onError);
     }
 
     /**
      * 停止语音识别
      */
     stopRecognition(): void {
-        if (!this.isRecording) {
-            return;
-        }
-
         this.isRecording = false;
-
-        if (USE_MOCK_API) {
-            if (this.recognition) {
+        this.browserRecognitionStopRequested = true;
+        if (this.recognition) {
+            try {
                 this.recognition.stop();
-                this.recognition = null;
+            } catch (_) {
+                /* ignore */
             }
-            console.log('[SpeechService-Browser] Stopped');
-            return;
+            this.recognition = null;
         }
-
-        funasrService.stopRecognition();
-        console.log('[SpeechService] 已停止识别');
+        console.log('[SpeechService-Browser] Stopped');
     }
 
     /**
@@ -163,6 +72,10 @@ export class SpeechRecognitionService {
     }
 
     private recognition: SpeechRecognition | null = null;
+    /** 浏览器识别致命错误已上报，避免 not-allowed 等导致的重复 onerror/onend 循环只通知一次 */
+    private browserRecognitionErrorReported = false;
+    /** 已请求停止（用户松开），onend 时不再自动 start，避免松开后仍一直录音 */
+    private browserRecognitionStopRequested = false;
 
     private startBrowserRecognition(onResult: OnResultCallback, onError?: OnErrorCallback): void {
         const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -171,6 +84,9 @@ export class SpeechRecognitionService {
             onError?.(err);
             return;
         }
+
+        this.browserRecognitionErrorReported = false;
+        this.browserRecognitionStopRequested = false;
 
         try {
             const recognition = new SpeechRecognition();
@@ -193,17 +109,41 @@ export class SpeechRecognitionService {
             };
 
             recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-                console.error('[SpeechService-Browser] Error:', event.error);
-                onError?.(new Error(event.error));
+                const errMsg = String(event.error || '');
+                const isFatal = errMsg === 'not-allowed' || event.error === 'aborted' || event.error === 'network';
+                if (isFatal) {
+                    this.isRecording = false;
+                    try {
+                        recognition.stop();
+                    } catch (_) { /* ignore */ }
+                    this.recognition = null;
+                }
+                if (!this.browserRecognitionErrorReported) {
+                    this.browserRecognitionErrorReported = true;
+                    const friendlyMessage =
+                        errMsg === 'not-allowed'
+                            ? '请允许麦克风权限，或点击左侧键盘图标使用文字输入'
+                            : errMsg === 'network'
+                                ? '网络不可用（浏览器语音依赖云端），请检查网络或使用键盘输入'
+                                : errMsg === 'no-speech'
+                                    ? '未检测到语音，请重试'
+                                    : errMsg;
+                    console.error('[SpeechService-Browser] Error:', event.error);
+                    onError?.(new Error(friendlyMessage));
+                }
             };
 
             recognition.onend = () => {
-                if (this.isRecording) {
-                    // Auto restart if supposedly still recording
+                if (this.recognition === null) return;
+                if (
+                    this.isRecording &&
+                    !this.browserRecognitionErrorReported &&
+                    !this.browserRecognitionStopRequested
+                ) {
                     try {
                         recognition.start();
-                    } catch (e) {
-                        // ignore 
+                    } catch (_) {
+                        // ignore
                     }
                 }
             };

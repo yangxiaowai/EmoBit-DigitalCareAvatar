@@ -22,8 +22,8 @@ class EdgeTTSService {
         reject: (error: Error) => void;
     }> = new Map();
     private requestId = 0;
-    /** 预生成缓存：voice:text -> audioUrl，不同音色分开缓存 */
-    private preloadCache = new Map<string, string>();
+    /** 预生成缓存：voice:text -> Blob（存 Blob 不存 URL，避免 revoke 后二次播放失效） */
+    private preloadCache = new Map<string, Blob>();
 
     private cacheKey(voice: VoiceType, text: string): string {
         return `${voice}:${text}`;
@@ -41,8 +41,7 @@ class EdgeTTSService {
             texts.map(async (text) => {
                 const key = this.cacheKey(voice, text);
                 if (this.preloadCache.has(key)) return;
-                const r = await this.synthesize(text, voice);
-                if (r.success && r.audioUrl) this.preloadCache.set(key, r.audioUrl);
+                await this.synthesize(text, voice);
             })
         );
     }
@@ -77,8 +76,11 @@ class EdgeTTSService {
      */
     async synthesize(text: string, voice: VoiceType = DEFAULT_GRANDDAUGHTER_VOICE): Promise<TTSResult> {
         const key = this.cacheKey(voice, text);
-        const cached = this.preloadCache.get(key);
-        if (cached) return { success: true, audioUrl: cached };
+        const cachedBlob = this.preloadCache.get(key);
+        if (cachedBlob) {
+            const url = URL.createObjectURL(cachedBlob);
+            return { success: true, audioUrl: url };
+        }
 
         return new Promise((resolve, reject) => {
             try {
@@ -95,10 +97,9 @@ class EdgeTTSService {
                         if (data.error) {
                             resolve({ success: false, error: data.error });
                         } else if (data.success && data.audio) {
-                            // 将Base64转换为Blob URL，并按音色+文本缓存
                             const audioBlob = this.base64ToBlob(data.audio, 'audio/mpeg');
+                            this.preloadCache.set(key, audioBlob);
                             const audioUrl = URL.createObjectURL(audioBlob);
-                            this.preloadCache.set(key, audioUrl);
                             resolve({ success: true, audioUrl });
                         }
                     } catch (e) {
@@ -152,6 +153,7 @@ class EdgeTTSService {
                 };
             } catch (err) {
                 console.error("Audio playback failed", err);
+                URL.revokeObjectURL(result.audioUrl);
                 if (onEnded) onEnded();
             }
         } else {

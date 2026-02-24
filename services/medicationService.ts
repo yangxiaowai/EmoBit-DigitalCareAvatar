@@ -127,19 +127,19 @@ class MedicationService {
     }
 
     /**
-     * 默认药物列表
+     * 默认药物列表（以盐酸奥司他韦为主）
      */
     private getDefaultMedications(): Medication[] {
         return [
             {
                 id: 'med_1',
-                name: '阿司匹林',
-                dosage: '100mg，1片',
-                frequency: '每日1次',
-                times: ['08:00'],
-                instructions: '早餐后服用，用温水送服',
-                purpose: '预防心血管疾病',
-                imageUrl: 'https://images.unsplash.com/photo-1550572017-edd951b55104?w=200',
+                name: '盐酸奥司他韦',
+                dosage: '75mg，1粒',
+                frequency: '每日2次',
+                times: ['08:00', '20:00'],
+                instructions: '与食物同服，用温水送服',
+                purpose: '抗流感',
+                imageUrl: '/medication/盐酸奥司他韦.jpg',
             },
             {
                 id: 'med_2',

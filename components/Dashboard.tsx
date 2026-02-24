@@ -284,75 +284,210 @@ const mockSleepData = [
     { name: '清醒', hours: 1, fill: '#e0e7ff' },
 ];
 
-// Refactored Sub-component for Real-time Charts to prevent full Dashboard re-renders
-const RealTimeHealthCharts = () => {
-    // Initial Real-time Data (Last 60 seconds)
-    const [data, setData] = useState(() => {
-        const initial = [];
-        const now = new Date();
-        for (let i = 60; i >= 0; i--) {
-            const t = new Date(now.getTime() - i * 1000);
-            initial.push({
-                time: t.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                bpm: Math.round(75 + Math.random() * 10 - 5),
-                pressure: Math.round(120 + Math.random() * 15 - 7)
-            });
-        }
-        return initial;
-    });
+    const RealTimeHealthCharts = () => {
+        const [activeChart, setActiveChart] = useState<'heart' | 'bp' | 'spo2'>('heart');
+        const [data, setData] = useState(() => {
+            const initial = [];
+            const now = new Date();
+            for (let i = 60; i >= 0; i--) {
+                const t = new Date(now.getTime() - i * 1000);
+                initial.push({
+                    time: t.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                    bpm: Math.round(75 + Math.random() * 10 - 5),
+                    pressure: Math.round(120 + Math.random() * 15 - 7),
+                    spo2: Math.round(97 + Math.random() * 3 - 1.5),
+                });
+            }
+            return initial;
+        });
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setData(prevData => {
-                const now = new Date();
-                const newPoint = {
-                    time: now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                    bpm: Math.round(75 + Math.sin(now.getTime() / 5000) * 10 + Math.random() * 5),
-                    pressure: Math.round(120 + Math.sin(now.getTime() / 8000) * 10 + Math.random() * 5)
-                };
-                return [...prevData.slice(1), newPoint];
-            });
-        }, 1000);
-        return () => clearInterval(interval);
-    }, []);
+        useEffect(() => {
+            const interval = setInterval(() => {
+                setData(prevData => {
+                    const now = new Date();
+                    const newPoint = {
+                        time: now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                        bpm: Math.round(75 + Math.sin(now.getTime() / 5000) * 10 + Math.random() * 5),
+                        pressure: Math.round(120 + Math.sin(now.getTime() / 8000) * 10 + Math.random() * 5),
+                        spo2: Math.round(97 + Math.sin(now.getTime() / 7000) * 1.5 + Math.random() * 1.5),
+                    };
+                    return [...prevData.slice(1), newPoint];
+                });
+            }, 1000);
+            return () => clearInterval(interval);
+        }, []);
 
-    return (
-        <div className="flex flex-col gap-6">
-            {/* Heart Rate Card */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col h-72">
-                <h3 className="text-base font-bold text-slate-700 mb-4 flex items-center gap-2"><Heart className="text-rose-500" size={18} /> 实时心率监测 (Live)</h3>
-                <div className="flex-1 w-full min-h-[200px]">
-                    <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-                        <LineChart data={data}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                            {/* Increased interval to prevent overlap */}
-                            <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} interval={10} />
-                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} domain={[60, 100]} width={25} />
-                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                            <Line type="monotone" dataKey="bpm" stroke="#f43f5e" strokeWidth={3} dot={false} activeDot={{ r: 5 }} isAnimationActive={false} />
-                        </LineChart>
-                    </ResponsiveContainer>
+        const latestBpm = data[data.length - 1]?.bpm ?? 75;
+        const latestPressure = data[data.length - 1]?.pressure ?? 120;
+        const latestSpo2 = data[data.length - 1]?.spo2 ?? 97;
+
+        const isHeartNormal = latestBpm >= 60 && latestBpm <= 100;
+        const isPressureNormal = latestPressure >= 90 && latestPressure <= 140;
+        const isSpo2Normal = latestSpo2 >= 95;
+
+        const currentValue =
+            activeChart === 'heart'
+                ? latestBpm
+                : activeChart === 'bp'
+                    ? latestPressure
+                    : latestSpo2;
+
+        const currentUnit =
+            activeChart === 'heart'
+                ? 'bpm'
+                : activeChart === 'bp'
+                    ? 'mmHg (收缩压)'
+                    : '%';
+
+        const currentStatusNormal =
+            activeChart === 'heart'
+                ? isHeartNormal
+                : activeChart === 'bp'
+                    ? isPressureNormal
+                    : isSpo2Normal;
+
+        return (
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="flex border-b border-slate-100">
+                    <button
+                        onClick={() => setActiveChart('heart')}
+                        className={`flex-1 py-3.5 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                            activeChart === 'heart'
+                                ? 'text-rose-600 border-b-2 border-rose-500 bg-rose-50/50'
+                                : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                    >
+                        <Heart size={15} /> 心率
+                    </button>
+                    <button
+                        onClick={() => setActiveChart('bp')}
+                        className={`flex-1 py-3.5 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                            activeChart === 'bp'
+                                ? 'text-indigo-600 border-b-2 border-indigo-500 bg-indigo-50/50'
+                                : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                    >
+                        <Activity size={15} /> 血压
+                    </button>
+                    <button
+                        onClick={() => setActiveChart('spo2')}
+                        className={`flex-1 py-3.5 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                            activeChart === 'spo2'
+                                ? 'text-sky-600 border-b-2 border-sky-500 bg-sky-50/50'
+                                : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                    >
+                        <Signal size={15} /> 血氧
+                    </button>
+                </div>
+
+                <div className="p-5">
+                    <div className="flex items-end gap-2 mb-4">
+                        <span
+                            className={`text-3xl font-bold tabular-nums ${
+                                activeChart === 'heart'
+                                    ? 'text-rose-600'
+                                    : activeChart === 'bp'
+                                        ? 'text-indigo-600'
+                                        : 'text-sky-600'
+                            }`}
+                        >
+                            {currentValue}
+                        </span>
+                        <span className="text-sm text-slate-400 mb-1">
+                            {currentUnit}
+                        </span>
+                        <div
+                            className={`ml-auto px-2.5 py-1 rounded-full text-xs font-medium ${
+                                currentStatusNormal ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                            }`}
+                        >
+                            {currentStatusNormal ? '正常' : '注意'}
+                        </div>
+                    </div>
+
+                    <div className="h-52">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={data}>
+                                <defs>
+                                    <linearGradient id="heartGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#f43f5e" stopOpacity={0.15} />
+                                        <stop offset="100%" stopColor="#f43f5e" stopOpacity={0} />
+                                    </linearGradient>
+                                    <linearGradient id="bpGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.15} />
+                                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                                    </linearGradient>
+                                    <linearGradient id="spo2Grad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#0ea5e9" stopOpacity={0.18} />
+                                        <stop offset="100%" stopColor="#0ea5e9" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} interval={10} />
+                                <YAxis
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#94a3b8', fontSize: 10 }}
+                                    domain={
+                                        activeChart === 'heart'
+                                            ? [60, 110]
+                                            : activeChart === 'bp'
+                                                ? [90, 150]
+                                                : [90, 100]
+                                    }
+                                    width={30}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        borderRadius: '12px',
+                                        border: 'none',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                                        fontSize: '12px',
+                                    }}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey={activeChart === 'heart' ? 'bpm' : activeChart === 'bp' ? 'pressure' : 'spo2'}
+                                    stroke={
+                                        activeChart === 'heart'
+                                            ? '#f43f5e'
+                                            : activeChart === 'bp'
+                                                ? '#6366f1'
+                                                : '#0ea5e9'
+                                    }
+                                    strokeWidth={2.5}
+                                    fill={
+                                        activeChart === 'heart'
+                                            ? 'url(#heartGrad)'
+                                            : activeChart === 'bp'
+                                                ? 'url(#bpGrad)'
+                                                : 'url(#spo2Grad)'
+                                    }
+                                    dot={false}
+                                    activeDot={{ r: 4, stroke: 'white', strokeWidth: 2 }}
+                                    isAnimationActive={false}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-3 px-1">
+                        <span className="text-xs text-slate-400">
+                            {activeChart === 'heart'
+                                ? '正常范围：60-100 bpm'
+                                : activeChart === 'bp'
+                                    ? '正常范围：90-140 mmHg'
+                                    : '正常范围：≥95%'}
+                        </span>
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                            <Signal size={10} /> 实时
+                        </span>
+                    </div>
                 </div>
             </div>
-
-            {/* BP Card */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col h-64">
-                <h3 className="text-base font-bold text-slate-700 mb-4 flex items-center gap-2"><Activity className="text-indigo-500" size={18} /> 实时血压监测 (Live)</h3>
-                <div className="flex-1 w-full min-h-[180px]">
-                    <ResponsiveContainer width="100%" height="100%" minHeight={180}>
-                        <LineChart data={data}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                            <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} interval={10} />
-                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} domain={[100, 140]} width={25} />
-                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                            <Line type="monotone" dataKey="pressure" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 5 }} isAnimationActive={false} />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-        </div>
-    );
-};
+        );
+    };
 
 const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
     const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
@@ -1618,6 +1753,11 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         const displayMins = sleepMinutes % 60;
         const sleepDisplay = `${displayHours}小时 ${displayMins > 0 ? displayMins + '分' : '0分'}`;
 
+        // 体征概要（用于顶部「需要您关注」和小卡片）
+        const heartRate = currentMetrics.heartRate;
+        const bloodPressure = currentMetrics.bloodPressure;
+        const bloodOxygen = currentMetrics.bloodOxygen;
+
         const sleepScore = useMemo(() => {
             let s = 60;
             if (totalSleepHours >= 7 && totalSleepHours <= 9) s += 20;
@@ -1627,6 +1767,76 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
             else if (deepRatio >= 0.2) s += 5;
             return Math.min(98, Math.max(55, s));
         }, [totalSleepHours, deepRatio]);
+
+        // 指标正常/异常判断
+        const isHeartNormal = heartRate >= 60 && heartRate <= 100;
+        const isBpHigh = bloodPressure.systolic >= 140 || bloodPressure.diastolic >= 90;
+        const isBpBorderline = !isBpHigh && (bloodPressure.systolic >= 130 || bloodPressure.diastolic >= 85);
+        const isBpNormal = !isBpHigh && !isBpBorderline;
+        const isSpo2Normal = bloodOxygen >= 95;
+        const isSleepGood = sleepScore >= 80;
+        const isSleepBorderline = !isSleepGood && sleepScore >= 70;
+
+        type HealthAlert = {
+            key: string;
+            title: string;
+            value: string;
+            normalRange: string;
+            message: string;
+            color: 'rose' | 'amber' | 'sky' | 'indigo';
+        };
+
+        const alerts: HealthAlert[] = [];
+
+        if (!isHeartNormal) {
+            alerts.push({
+                key: 'heart',
+                title: heartRate > 100 ? '心率偏快' : '心率偏慢',
+                value: `${heartRate} bpm`,
+                normalRange: '60-100 bpm',
+                message: heartRate > 100
+                    ? '心率略快，可提醒爸爸稍作休息，避免剧烈运动，如持续心悸不适建议就医评估。'
+                    : '心率偏慢，如伴有头晕乏力、胸闷气短等症状，建议尽快就医评估心功能。',
+                color: 'rose',
+            });
+        }
+
+        if (!isBpNormal) {
+            alerts.push({
+                key: 'bp',
+                title: isBpHigh ? '血压偏高' : '血压临界偏高',
+                value: `${bloodPressure.systolic}/${bloodPressure.diastolic} mmHg`,
+                normalRange: '90-120 / 60-80 mmHg',
+                message: isBpHigh
+                    ? '血压已明显高于正常范围，建议密切观察，如反复偏高或伴头痛胸闷等不适，请及时就医。'
+                    : '血压略高，属于临界范围，可提醒爸爸清淡饮食、适度运动，注意作息并定期复测。',
+                color: 'amber',
+            });
+        }
+
+        if (!isSpo2Normal) {
+            alerts.push({
+                key: 'spo2',
+                title: '血氧偏低',
+                value: `${bloodOxygen}%`,
+                normalRange: '≥95%',
+                message: '血氧饱和度略低，如持续低于 93% 或出现明显气促、胸闷等，请尽快就医评估心肺功能。',
+                color: 'sky',
+            });
+        }
+
+        if (!isSleepGood && !isSleepBorderline) {
+            alerts.push({
+                key: 'sleep',
+                title: '睡眠质量偏低',
+                value: `${sleepScore} 分`,
+                normalRange: '良好 ≥ 80 分',
+                message: '昨夜睡眠时长和深睡比例偏少，可帮助爸爸调整作息，避免晚间浓茶咖啡和长时间看屏幕，如长期失眠建议就医。',
+                color: 'indigo',
+            });
+        }
+
+        const hasAttention = alerts.length > 0;
 
         const { sleepDescription, sleepTipsOrAffirmation } = useMemo(() => {
             const deepPct = Math.round(deepRatio * 100);
@@ -1646,121 +1856,361 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
             return { sleepDescription: description, sleepTipsOrAffirmation: tipsOrAffirmation };
         }, [totalSleepHours, deepRatio, deepSleepHours, lightSleepHours, awakeHours, displayHours, displayMins]);
 
-        return (
-            <div className="flex flex-col gap-6 p-4 pb-24 animate-fade-in-up">
-                <h2 className="text-xl font-bold text-slate-800 px-1">健康生命体征</h2>
+        const [activeAiTab, setActiveAiTab] = useState<'report' | 'cognitive'>('report');
 
-                {/* Refactored Charts Component */}
+        return (
+            <div className="flex flex-col gap-5 p-4 pb-24 animate-fade-in-up">
+
+                {/* 顶部「需要您关注」提醒区 */}
+                {hasAttention ? (
+                    <>
+                        <div className="bg-gradient-to-r from-amber-400 to-orange-400 px-4 py-4 rounded-3xl text-white shadow-md">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-2xl bg-white/20 flex items-center justify-center">
+                                        <AlertTriangle size={18} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold">需要您关注</p>
+                                        <p className="text-[11px] opacity-90">
+                                            共 {alerts.length} 项指标超出理想范围，系统已为您整理简单说明与建议。
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="text-right text-[11px] opacity-90">
+                                    <p>手环在线 · 实时监测中</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] opacity-90">
+                                <span>同步于 {new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                                <span>{alerts.length} 项提醒</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            {alerts.map((alert) => {
+                                const bg =
+                                    alert.color === 'rose'
+                                        ? 'bg-rose-50 border-rose-100'
+                                        : alert.color === 'amber'
+                                            ? 'bg-amber-50 border-amber-100'
+                                            : alert.color === 'sky'
+                                                ? 'bg-sky-50 border-sky-100'
+                                                : 'bg-indigo-50 border-indigo-100';
+                                const dot =
+                                    alert.color === 'rose'
+                                        ? 'bg-rose-400'
+                                        : alert.color === 'amber'
+                                            ? 'bg-amber-400'
+                                            : alert.color === 'sky'
+                                                ? 'bg-sky-400'
+                                                : 'bg-indigo-400';
+                                const valueColor =
+                                    alert.color === 'rose'
+                                        ? 'text-rose-600'
+                                        : alert.color === 'amber'
+                                            ? 'text-amber-600'
+                                            : alert.color === 'sky'
+                                                ? 'text-sky-600'
+                                                : 'text-indigo-600';
+
+                                return (
+                                    <div key={alert.key} className={`${bg} border rounded-3xl p-4 shadow-sm`}>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`w-2 h-2 rounded-full ${dot}`} />
+                                                <p className="text-sm font-semibold text-slate-900">{alert.title}</p>
+                                            </div>
+                                            <span className="text-[11px] text-slate-400">
+                                                {new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 mb-3">
+                                            <div className="bg-white rounded-2xl px-3 py-2.5">
+                                                <p className="text-[11px] text-slate-400 mb-1">当前检测值</p>
+                                                <p className={`text-xl font-bold tabular-nums ${valueColor}`}>{alert.value}</p>
+                                            </div>
+                                            <div className="bg-white rounded-2xl px-3 py-2.5">
+                                                <p className="text-[11px] text-slate-400 mb-1">参考正常范围</p>
+                                                <p className="text-sm font-semibold text-slate-700">{alert.normalRange}</p>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white rounded-2xl px-3 py-2 mb-2">
+                                            <p className="text-xs text-slate-600">
+                                                {alert.message}
+                                            </p>
+                                        </div>
+                                        <button className="text-xs text-slate-600 font-medium">
+                                            查看该指标历史趋势 &gt;
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </>
+                ) : (
+                    <div className="bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600 p-4 rounded-3xl text-white shadow-md relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-[0.07] rounded-full -mr-10 -mt-10 blur-2xl" />
+                        <div className="relative z-10 flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm border border-white/10">
+                                    <ShieldCheck size={18} />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold">今日暂无线索需特别关注</p>
+                                    <p className="text-[11px] text-emerald-100 opacity-80">生命体征整体稳定，请继续保持良好作息</p>
+                                </div>
+                            </div>
+                            <p className="text-[11px] opacity-80">{new Date().toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Section: Vital Signs */}
+                <div className="flex items-center gap-2 px-1 mt-1">
+                    <h3 className="text-base font-bold text-slate-800">实时体征监测</h3>
+                    <div className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent"></div>
+                    <button className="text-[11px] text-indigo-500 hover:text-indigo-600 font-medium">查看历史</button>
+                </div>
+
+                {/* 底部大图卡片：心率 / 血压 / 血氧 */}
                 <RealTimeHealthCharts />
 
-                {/* Sleep Card (Restored Circular Score + Auto Description & Tips) */}
-                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h3 className="text-base font-bold text-slate-700">睡眠质量分析</h3>
-                            <p className="text-sm text-slate-500 mt-1">昨日睡眠 <span className="font-bold text-slate-800">{sleepDisplay}</span></p>
-                        </div>
-                        <div className="w-16 h-16 rounded-full border-4 border-indigo-500 flex items-center justify-center bg-indigo-50 text-indigo-700 font-bold text-lg">
-                            {sleepScore}
-                        </div>
-                    </div>
+                {/* Section: Sleep */}
+                <div className="flex items-center gap-2 px-1 mt-1">
+                    <h3 className="text-base font-bold text-slate-800">昨夜睡眠</h3>
+                    <div className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent"></div>
+                    <button className="text-[11px] text-indigo-500 hover:text-indigo-600 font-medium">查看详情</button>
+                </div>
 
-                    <div className="space-y-3 mt-2">
-                        {mockSleepData.map((d) => (
-                            <div key={d.name} className="flex items-center gap-3">
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.fill }}></div>
-                                <span className="text-sm text-slate-600 w-12">{d.name}</span>
-                                <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full rounded-full" style={{ width: `${(d.hours / 8) * 100}%`, backgroundColor: d.fill }}></div>
+                {/* 昨夜睡眠大卡片（参考设计稿） */}
+                <div className="bg-gradient-to-br from-indigo-500 to-violet-500 rounded-3xl shadow-md overflow-hidden">
+                    {/* 顶部时间与总时长 */}
+                    <div className="px-5 pt-4 pb-4 text-white">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <Moon size={18} className="text-indigo-100" />
+                                <p className="text-sm font-semibold">入睡 22:30 · 起床 05:30</p>
+                            </div>
+                            <div className="flex flex-col items-end text-[11px] text-indigo-100/80">
+                                <span>较前一晚 +0.5h</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-xs text-indigo-100/80 mb-1">总睡眠时长</p>
+                                <p className="text-3xl font-bold leading-none">{sleepDisplay}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="relative w-14 h-14 rounded-full bg-indigo-400/40 flex items-center justify-center">
+                                    <div className="absolute inset-1 rounded-full border-2 border-cyan-300/80" />
+                                    <span className="text-lg font-bold text-cyan-100">{sleepScore}</span>
                                 </div>
-                                <span className="text-sm font-bold text-slate-700">{d.hours}h</span>
+                                <div className="text-xs text-indigo-50">
+                                    <p className="font-semibold">睡眠评分</p>
+                                    <p className="opacity-80">{sleepScore >= 85 ? '优秀' : sleepScore >= 75 ? '良好' : '需关注'}</p>
+                                </div>
                             </div>
-                        ))}
-                    </div>
-
-                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-3">
-                        <p className="text-sm text-slate-600 leading-relaxed">{sleepDescription}</p>
-                        <div className={`text-sm leading-relaxed rounded-xl p-3 ${totalSleepHours >= 7 && deepRatio >= 0.25 ? 'bg-emerald-50 text-emerald-800 border border-emerald-100' : 'bg-amber-50 text-amber-900 border border-amber-100'}`}>
-                            <p>{sleepTipsOrAffirmation}</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* AI Health Report Card (New Feature) */}
-                <div className="bg-gradient-to-br from-violet-600 to-indigo-600 p-6 rounded-3xl shadow-lg shadow-indigo-200 text-white relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
-
-                    <div className="flex items-center gap-3 mb-4 relative z-10">
-                        <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-xl border border-white/20">
-                            <Sparkles size={20} className="text-yellow-300" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-lg leading-tight">AI 综合健康日报</h3>
-                            <p className="text-[10px] text-indigo-100 opacity-90">基于生理数据与认知交互记录</p>
                         </div>
                     </div>
 
-                    {!reportContent && !reportLoading && (
-                        <div className="relative z-10">
-                            <p className="text-sm text-indigo-50 mb-4 leading-relaxed opacity-90">
-                                系统将结合今日的实时体征数据（心率/血压）与老人在应用端的语音交互、记忆回顾等行为数据，利用大模型生成综合健康评估。
+                    {/* 阶段分布条 */}
+                    <div className="bg-white/5 px-5 py-3 text-xs text-indigo-100 flex items-center justify-between">
+                        <span>睡眠阶段分布</span>
+                        <div className="flex items-center gap-3">
+                            <span className="flex items-center gap-1">
+                                <span className="w-3 h-1 rounded-full bg-indigo-200" /> 深睡
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <span className="w-3 h-1 rounded-full bg-indigo-300" /> 浅睡
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <span className="w-3 h-1 rounded-full bg-indigo-100" /> REM
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* 分段条（使用 mockSleepData 映射） */}
+                    <div className="bg-white px-5 pt-3 pb-4">
+                        <div className="flex gap-1 mb-3">
+                            {mockSleepData.map((d, idx) => (
+                                <div
+                                    key={d.name + idx}
+                                    className="h-3 rounded-full"
+                                    style={{ flex: d.hours, backgroundColor: d.fill }}
+                                />
+                            ))}
+                        </div>
+
+                        {/* 深睡 / 浅睡 / REM 统计 */}
+                        <div className="grid grid-cols-3 gap-3 mb-3 text-sm">
+                            <div className="bg-slate-50 rounded-2xl px-3 py-2">
+                                <p className="text-xs text-slate-400 mb-1">深睡</p>
+                                <p className="text-base font-bold text-slate-800">{deepSleepHours}h</p>
+                                <p className="text-[11px] text-indigo-500 mt-0.5">充足</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-2xl px-3 py-2">
+                                <p className="text-xs text-slate-400 mb-1">浅睡</p>
+                                <p className="text-base font-bold text-slate-800">{lightSleepHours}h</p>
+                                <p className="text-[11px] text-indigo-500 mt-0.5">正常</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-2xl px-3 py-2">
+                                <p className="text-xs text-slate-400 mb-1">清醒/REM</p>
+                                <p className="text-base font-bold text-slate-800">{awakeHours}h</p>
+                                <p className="text-[11px] text-indigo-500 mt-0.5">正常</p>
+                            </div>
+                        </div>
+
+                        {/* 文本建议 */}
+                        <div className="mt-1 rounded-2xl bg-emerald-50 px-3 py-2.5 flex items-start gap-2">
+                            <span className="mt-[2px] text-sm">💡</span>
+                            <p className="text-xs text-emerald-900 leading-relaxed">
+                                {sleepDescription}
                             </p>
-                            <button
-                                onClick={generateReport}
-                                className="w-full py-3 bg-white text-indigo-600 rounded-xl font-bold text-sm shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
-                            >
-                                <Sparkles size={16} /> 生成今日分析报告
-                            </button>
                         </div>
-                    )}
-
-                    {reportLoading && (
-                        <div className="flex flex-col items-center justify-center py-6 relative z-10">
-                            <Loader2 size={32} className="text-white animate-spin mb-3" />
-                            <p className="text-xs text-indigo-100 animate-pulse">正在分析多模态数据...</p>
-                        </div>
-                    )}
-
-                    {reportContent && (
-                        <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/10 relative z-10 animate-fade-in-up">
-                            <div className="report-markdown font-sans text-xs leading-relaxed text-indigo-50 [&_h2]:font-bold [&_h2]:text-sm [&_h2]:mt-3 [&_h2]:mb-1 [&_h2:first-child]:mt-0 [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:my-2 [&_li]:my-0.5 [&_p]:my-1 [&_strong]:font-semibold">
-                                <ReactMarkdown>{reportContent}</ReactMarkdown>
-                            </div>
-                            <button
-                                onClick={() => setReportContent(null)}
-                                className="mt-3 text-[10px] text-indigo-200 underline opacity-60 hover:opacity-100"
-                            >
-                                重新生成
-                            </button>
-                        </div>
-                    )}
+                    </div>
                 </div>
 
-                {/* NLP Cognitive Analysis (Alzheimer's Prevention) */}
-                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-emerald-100 rounded-lg">
-                            <Brain size={18} className="text-emerald-600" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-base font-bold text-slate-800">NLP 语言认知分析</h3>
-                            <p className="text-xs text-slate-500">阿尔兹海默症早期筛查</p>
-                        </div>
+                {/* Section: AI Analysis */}
+                <div className="flex items-center gap-2 px-1 mt-1">
+                    <h3 className="text-base font-bold text-slate-800">AI 智能分析</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-violet-100 text-violet-700 flex items-center gap-1">
+                        AI
+                    </span>
+                    <div className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent"></div>
+                </div>
+
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm">
+                    {/* Tabs */}
+                    <div className="flex px-3 pt-3 pb-1 gap-2">
                         <button
-                            onClick={generateCognitive}
-                            disabled={cognitiveLoading}
-                            className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition-colors flex items-center gap-1"
+                            onClick={() => setActiveAiTab('report')}
+                            className={`flex-1 flex items-center justify-center gap-1.5 rounded-2xl py-2 text-xs font-semibold ${
+                                activeAiTab === 'report'
+                                    ? 'bg-slate-900 text-white'
+                                    : 'bg-slate-50 text-slate-500'
+                            }`}
                         >
-                            {cognitiveLoading ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
-                            {cognitiveLoading ? '分析中' : '开始分析'}
+                            <FileText size={13} />
+                            健康日报
+                        </button>
+                        <button
+                            onClick={() => setActiveAiTab('cognitive')}
+                            className={`flex-1 flex items-center justify-center gap-1.5 rounded-2xl py-2 text-xs font-semibold ${
+                                activeAiTab === 'cognitive'
+                                    ? 'bg-slate-900 text-white'
+                                    : 'bg-slate-50 text-slate-500'
+                            }`}
+                        >
+                            <Brain size={13} />
+                            认知评估
                         </button>
                     </div>
 
-                    {cognitiveContent && (
-                        <div className="mt-2 p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-600 leading-relaxed animate-fade-in report-markdown [&_h2]:font-bold [&_h2]:text-sm [&_h2]:mt-3 [&_h2]:mb-1 [&_h2:first-child]:mt-0 [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:my-2 [&_li]:my-0.5 [&_p]:my-1 [&_strong]:font-semibold [&_strong]:text-slate-700">
-                            <ReactMarkdown>{cognitiveContent}</ReactMarkdown>
-                        </div>
-                    )}
+                    {/* Content */}
+                    <div className="p-4 pt-2">
+                        {activeAiTab === 'report' ? (
+                            <div className="bg-gradient-to-r from-violet-500 to-indigo-500 rounded-2xl p-4 text-white">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-9 h-9 rounded-2xl bg-white/20 flex items-center justify-center">
+                                        <Sparkles size={18} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold">爸爸的健康日报</p>
+                                        <p className="text-[11px] text-indigo-100/80">
+                                            综合体征数据 + 认知交互记录分析生成
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {!reportContent && !reportLoading && (
+                                    <div className="bg-white/10 rounded-xl p-3 text-xs leading-relaxed mb-3">
+                                        <p className="opacity-90">
+                                            系统将综合爸爸今日的心率、血压、血氧、睡眠数据以及认知交互记录，生成一份简明的健康评估日报，帮助您快速了解整体情况。
+                                        </p>
+                                    </div>
+                                )}
+
+                                {reportLoading && (
+                                    <div className="flex flex-col items-center justify-center py-4">
+                                        <Loader2 size={24} className="animate-spin mb-2" />
+                                        <p className="text-[11px] text-indigo-100/90">正在生成今日健康日报…</p>
+                                    </div>
+                                )}
+
+                                {reportContent && !reportLoading && (
+                                    <div className="bg-white/10 rounded-xl p-3 text-xs leading-relaxed mb-3">
+                                        <p className="text-[11px] text-indigo-100/80 mb-1">今日报告摘要</p>
+                                        <div className="report-markdown font-sans text-[11px] leading-relaxed text-indigo-50 line-clamp-4">
+                                            <ReactMarkdown>{reportContent}</ReactMarkdown>
+                                        </div>
+                                        <button className="mt-1 text-[10px] underline text-indigo-100/90">
+                                            查看完整日报
+                                        </button>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={generateReport}
+                                    disabled={reportLoading}
+                                    className="mt-1 w-full h-9 rounded-2xl bg-white text-violet-600 text-xs font-semibold flex items-center justify-center gap-1 shadow-sm disabled:opacity-70"
+                                >
+                                    <Sparkles size={14} />
+                                    {reportLoading ? '生成中…' : '生成今日健康日报'}
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="bg-gradient-to-r from-sky-500 to-emerald-500 rounded-2xl p-4 text-white">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-9 h-9 rounded-2xl bg-white/20 flex items-center justify-center">
+                                        <Brain size={18} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold">认知评估报告</p>
+                                        <p className="text-[11px] text-emerald-100/80">
+                                            基于语言内容与交互行为的 NLP 分析
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {!cognitiveContent && !cognitiveLoading && (
+                                    <div className="bg-white/10 rounded-xl p-3 text-xs leading-relaxed mb-3">
+                                        <p className="opacity-90">
+                                            系统将分析爸爸在应用端的语音对话、记忆回顾等记录，从语言流畅度、记忆检索、情绪表达等多个维度给出认知状态评估与照护建议。
+                                        </p>
+                                    </div>
+                                )}
+
+                                {cognitiveLoading && (
+                                    <div className="flex flex-col items-center justify-center py-4">
+                                        <Loader2 size={24} className="animate-spin mb-2" />
+                                        <p className="text-[11px] text-emerald-50/90">正在生成认知评估报告…</p>
+                                    </div>
+                                )}
+
+                                {cognitiveContent && !cognitiveLoading && (
+                                    <div className="bg-white/10 rounded-xl p-3 text-xs leading-relaxed mb-3">
+                                        <p className="text-[11px] text-emerald-100/80 mb-1">本次评估摘要</p>
+                                        <div className="report-markdown font-sans text-[11px] leading-relaxed text-emerald-50 line-clamp-4">
+                                            <ReactMarkdown>{cognitiveContent}</ReactMarkdown>
+                                        </div>
+                                        <button className="mt-1 text-[10px] underline text-emerald-100/90">
+                                            查看完整评估
+                                        </button>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={generateCognitive}
+                                    disabled={cognitiveLoading}
+                                    className="mt-1 w-full h-9 rounded-2xl bg-white text-emerald-600 text-xs font-semibold flex items-center justify-center gap-1 shadow-sm disabled:opacity-70"
+                                >
+                                    <Brain size={14} />
+                                    {cognitiveLoading ? '生成中…' : '生成认知评估'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
 
@@ -2023,7 +2473,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                                     <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-indigo-200 shadow-md">
                                         <Activity size={18} className="text-white" />
                                     </div>
-                                    <span className="text-lg font-bold text-slate-800 tracking-tight">EmoBit <span className="text-slate-400 font-normal">· 忆守</span></span>
+                                    <span className="text-lg font-bold text-slate-800 tracking-tight">MemoLink <span className="text-slate-400 font-normal">忆联</span></span>
                                 </div>
                                 <button
                                     onClick={() => setIsSettingsOpen(true)}
