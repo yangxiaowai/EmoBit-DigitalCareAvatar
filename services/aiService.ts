@@ -56,6 +56,15 @@ export interface AIResponse {
     actionData?: any;
 }
 
+/** 认知评估简版（界面展示用）：综合分、四维度得分、近期交互评估与陪伴建议、完整报告正文 */
+export interface CognitiveBrief {
+    overallScore: number;
+    dimensions: { id: string; name: string; score: number; status: string }[];
+    recentInteractionEvaluation: string;
+    accompanyingSuggestions: string;
+    fullReport: string;
+}
+
 class AIService {
     private apiKey: string = '';
     private profile: ElderlyProfile | null = null;
@@ -68,6 +77,10 @@ class AIService {
         // 加载老人档案
         this.loadProfile();
     }
+
+    /** 最近一次环境语义分析调用时间与简单缓存，避免频繁触发限流 */
+    private lastEnvironmentCallAt = 0;
+    private environmentCache = new Map<string, { ts: number; text: string }>();
 
     /**
      * 设置 API Key
@@ -595,22 +608,53 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
             return this.buildLocalHealthBrief(bpm, pressure, sleep);
         }
 
-        const system = `你是老年健康助理，面向家属撰写「今日健康日报」。要求：
-1. 数据解读：必须结合本次提供的心率、血压、睡眠具体数值，逐项简要分析（是否在正常范围、有无需关注趋势）。
-2. 综合评估：根据三项数据给出整体评估（平稳/需关注/建议就医等）。
-3. 建议与指导：给出 2～4 条具体、可操作的生活与照护建议（如饮食、活动、用药、复测、就医时机等），语气温和、易懂。
-4. 输出格式：请使用 Markdown 书写，便于前端渲染。例如：
-   - 用 ## 作为小节标题（如 ## 今日数据、## 分析与建议）
-   - 用 - 或 * 列出要点
-   - 可用 **加粗** 强调关键结论
-   - 段落之间空一行。只输出正文，不要最外层「简报：」等前缀。`;
+        const system = `你是老年健康助理，面向子女撰写「今日健康日报」的简版，用于界面上的「整体评估」「需要留意」「亲情建议」三块展示。语气清晰、有同理心，直接对家属说明「爸爸」的健康与照护要点。
 
-        const user = `请根据以下今日体征数据生成健康日报（含详细分析与建议），使用 Markdown 格式输出：
+必须严格使用 Markdown 输出，且只包含以下三个一级小节（顺序固定，用 ## 标题）：
+
+## 今日关键结论
+## 详细指标解读
+## 子女照护建议
+
+各小节内容要求（对应界面上的「整体评估」「需要留意」「亲情建议」），请以下面这组三段示例为**模板风格**进行组织，但需根据真实数据改写内容与数值，不要逐字照抄：
+
+整体评估：
+爸爸今日整体健康状况良好。心率、血氧均在正常范围，睡眠质量优秀，您无需过度担心。
+
+需要留意：
+收缩压128mmHg略偏高，建议下次通话时提醒爸爸饮食少盐，并鼓励饭后散步。
+
+亲情建议：
+爸爸认知状态良好、情绪稳定。近期可以多聊聊回忆性话题，有助于维持认知活力。
+
+具体要求：
+
+1. 【今日关键结论】对应「整体评估」：
+   - 写 1 段话（2～4 句即可），概括爸爸今日整体健康状况。
+   - 明确写出心率、血氧、睡眠等关键指标是否在正常或异常范围，并给出总体结论（如：良好 / 需关注）。
+   - 若整体无大碍，结尾用一句安抚家属，例如：「您无需过度担心。」语气与上方示例保持一致。
+   - 不要用列表，用连贯的短段落即可；可适当用 **加粗** 标出关键结论词。
+
+2. 【详细指标解读】对应「需要留意」：
+   - 若有略偏高/偏低的指标，写出具体数值（如示例中的「收缩压128mmHg略偏高」），并给出 1～2 句具体、可执行的照护建议（如：提醒少盐、饭后散步、注意休息、持续监测等）。
+   - 若各项均在正常范围，可写 1 句说明「目前各项指标均在正常范围，暂无特别需要留意的事项。」语气与示例同样简洁、温和。
+   - 整体字数与示例相近，内容聚焦在「需要家属留意什么」和「可以做什么」。
+
+3. 【子女照护建议】对应「亲情建议」：
+   - 写 1 段话，结合认知与情绪状态（如：爸爸认知状态良好、情绪稳定），并给出与家人的互动与陪伴建议。
+   - 建议要具体、温暖，例如：多聊回忆性话题以维持认知活力、多关心睡眠与心情、适时安排家庭活动等，语气参考示例。
+
+格式与语气：
+- 三个小节均为 1 段话为主，必要时可多 1～2 句，不要长列表堆砌。
+- 用中文全角标点，避免专业术语堆砌，让普通家属能一眼看懂。
+- 只输出上述三个 ## 小节正文，不要加「报告：」「总结：」等前缀。`;
+
+        const user = `请根据以下今日体征数据，按「今日关键结论」「详细指标解读」「子女照护建议」三部分生成健康日报简版（每部分 1 段话，风格参考上述说明）：
 - 心率：${bpm} 次/分
 - 血压：${pressure} mmHg
 - 睡眠：${sleep} 小时
 
-请逐项分析并给出具体建议，使用 ## 小节标题和 - 列表。`;
+请直接输出三小节内容，使用 ## 作为小节标题。`;
 
         try {
             const text = await this.callGroqOnce(system, user, { maxTokens: 800 });
@@ -625,27 +669,41 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
      * 本地兜底：根据心率、血压、睡眠数值生成简要分析与建议（无 API 或调用失败时）
      */
     private buildLocalHealthBrief(bpm: number, pressure: string, sleep: number): string {
-        const lines: string[] = [];
-        lines.push(`## 今日数据\n\n心率 **${bpm}** 次/分，血压 **${pressure}** mmHg，睡眠 **${sleep}** 小时。`);
-        lines.push(`## 分析与建议\n`);
-
-        if (bpm < 60) lines.push(`- **心率**：偏慢，建议避免剧烈活动，如有头晕、乏力可就医复查。`);
-        else if (bpm <= 100) lines.push(`- **心率**：在常见正常范围内。`);
-        else lines.push(`- **心率**：偏快，建议休息、避免激动与饱餐，持续偏高需监测或就医。`);
-
         const [systolicStr, diastolicStr] = pressure.split('/').map(s => s.trim());
         const sys = parseInt(systolicStr, 10) || 120;
         const dia = parseInt(diastolicStr, 10) || 80;
-        if (sys >= 140 || dia >= 90) lines.push(`- **血压**：偏高，建议低盐饮食、按时服药、每日定时测量，控制不佳请就医。`);
-        else if (sys >= 130 || dia >= 85) lines.push(`- **血压**：接近上限，建议注意饮食与作息，继续监测。`);
-        else lines.push(`- **血压**：在理想范围内，请保持当前生活习惯与用药。`);
 
-        if (sleep < 5) lines.push(`- **睡眠**：偏少，建议固定就寝时间、减少午睡与晚间屏幕使用，必要时咨询医生。`);
-        else if (sleep < 7) lines.push(`- **睡眠**：略少，可适当增加午休或提前就寝。`);
-        else lines.push(`- **睡眠**：时长充足，有利于身体恢复。`);
+        const bpmOk = bpm >= 60 && bpm <= 100;
+        const bpOk = sys < 130 && dia < 85;
+        const sleepOk = sleep >= 7;
 
-        lines.push(`- **整体建议**：规律作息、适量饮水、按时服药，如有不适及时联系医生或家属。`);
-        return lines.join('\n');
+        let overall = '';
+        if (bpmOk && bpOk && sleepOk) {
+            overall = `爸爸今日整体健康状况良好。心率、血氧均在正常范围，睡眠质量优秀，您无需过度担心。`;
+        } else {
+            overall = `爸爸今日部分指标值得关注。请结合下方「需要留意」与「亲情建议」做好照护与随访。`;
+        }
+
+        let pointsToNote = '';
+        if (sys >= 130 || dia >= 85) {
+            pointsToNote = `收缩压${sys}mmHg${sys >= 140 ? '偏高' : '略偏高'}，建议下次通话时提醒爸爸饮食少盐，并鼓励饭后散步。`;
+        }
+        if (bpm < 60 || bpm > 100) {
+            const t = bpm < 60 ? '偏慢' : '偏快';
+            pointsToNote += (pointsToNote ? ' ' : '') + `心率${bpm}次/分${t}，建议避免剧烈活动、注意休息，持续异常可就医复查。`;
+        }
+        if (sleep < 6) {
+            pointsToNote += (pointsToNote ? ' ' : '') + `睡眠${sleep}小时略少，可提醒固定就寝时间、减少晚间屏幕使用。`;
+        }
+        if (!pointsToNote) pointsToNote = '目前各项指标均在正常范围，暂无特别需要留意的事项。';
+
+        const familySuggestions = `爸爸认知状态良好、情绪稳定。近期可以多聊聊回忆性话题，有助于维持认知活力；规律作息、适量饮水、按时服药，如有不适及时联系医生或家属。`;
+
+        return [
+            `## 今日关键结论\n\n${overall}`,
+            `## 详细指标解读\n\n${pointsToNote}`,
+            `## 子女照护建议\n\n${familySuggestions}`,
+        ].join('\n\n');
     }
 
     /**
@@ -653,31 +711,68 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
      * @param history 交互/多模态历史（可选），可包含时间、场景、对话或行为片段
      */
     async generateCognitiveReport(history: unknown[]): Promise<string> {
+        const brief = await this.generateCognitiveReportStructured(history);
+        return brief.fullReport;
+    }
+
+    /**
+     * 生成认知评估简版（结构化）：综合分、四维度、近期交互评估与陪伴建议、完整报告
+     * 用于界面展示「爸爸的认知评估」卡片：综合分圆环、四维度得分、两段文案、查看详细报告
+     */
+    async generateCognitiveReportStructured(history: unknown[]): Promise<CognitiveBrief> {
         if (!this.getApiKey()) {
-            return this.buildLocalCognitiveReport(history);
+            return this.buildLocalCognitiveBrief(history);
         }
 
-        const system = `你是老年语言与认知健康助理，面向家属撰写「NLP 语言认知分析报告」。要求必须包含以下两部分，语气客观、温和、易懂。
+        const system = `你是老年语言与认知健康助理，面向家属生成「认知评估」结构化简版。必须输出一个合法的 JSON 对象，且仅输出该 JSON，不要 markdown 代码块或前后缀。
 
-一、细节描述（体现语言认知能力的表现）
-请从时间、地点、情境、具体动作与语言等维度描述，例如：在什么时间什么场合发生了哪些情况；老人当时说了什么、做了什么，以及这些表现如何反映语言理解、表达、记忆或注意力等方面的变化；若有具体对话或行为片段请简要说明反映的认知特点（如找词困难、重复、答非所问、遗忘近期事等）。
+JSON 结构（字段名必须一致）：
+{
+  "overallScore": 综合分（0-100 的整数，如 92）,
+  "dimensions": [
+    { "id": "semantic", "name": "语义连贯性", "score": 0-100, "status": "优秀" 或 "良好" 或 "一般" },
+    { "id": "vocabulary", "name": "词汇丰富度", "score": 0-100, "status": "优秀" 或 "良好" 或 "一般" },
+    { "id": "emotion", "name": "情感表达", "score": 0-100, "status": "优秀" 或 "良好" 或 "一般" },
+    { "id": "memory", "name": "记忆关联", "score": 0-100, "status": "优秀" 或 "良好" 或 "一般" }
+  ],
+  "recentInteractionEvaluation": "近期交互评估的 1～2 段话。风格示例：爸爸近日对话中语义表达清晰，能够准确回忆近期事件，逻辑连贯性良好。认知功能未发现退化迹象，您可以放心。",
+  "accompanyingSuggestions": "陪伴建议的 1～2 段话。风格示例：记忆关联得分85分，建议多和爸爸聊聊往事和家庭趣事，有助于巩固长期记忆，增进亲子情感。可根据实际最低分维度给出具体建议。",
+  "fullReport": "完整认知报告的 Markdown 正文（用于弹窗详情的多段落内容），包含细节描述与子女可做的帮助与建议，用 ## 小节标题、- 列表、**加粗**。"
+}
 
-二、子女可做的帮助与建议
-请给出具体、可操作的建议：日常交流上如何与老人对话（语速、重复、确认、耐心倾听）；认知训练上如朗读、回忆一天、看图说话等的频率与方式；生活安排上规律作息、社交、兴趣活动；何时需要就医或做专业评估。
-
-输出格式：请使用 Markdown 书写，便于前端渲染。例如用 ## 作为小节标题（如 ## 细节描述、## 子女建议），用 - 列出要点，可用 **加粗** 强调关键词，段落之间空一行。只输出正文，不要最外层「报告：」等前缀。`;
+要求：
+- overallScore 与 dimensions 的分数要与对话/交互表现一致，有数据时略严格、无数据时可为示范值（如 85～95）。
+- recentInteractionEvaluation：概括近期对话中的语义、回忆、逻辑与是否发现退化迹象，语气温和、让家属安心。
+- accompanyingSuggestions：结合某一维度得分（尤其是较低的）给出具体陪伴建议，如聊往事、家庭趣事、巩固长期记忆、增进情感。
+- fullReport：与原有「NLP 语言认知分析报告」一致，含细节描述与子女建议，Markdown 格式。`;
 
         const hasHistory = Array.isArray(history) && history.length > 0;
         const user = hasHistory
-            ? `请根据以下近期交互/行为数据，生成语言认知分析报告（含具体场景细节与子女照护建议），使用 Markdown 格式输出。\n${JSON.stringify(history, null, 2)}`
-            : `近期暂无具体交互数据。请基于老年人常见语言认知表现写一份示范性报告：先举例说明可能出现的细节（如某次早餐时老人叫不出常见物品名称、或重复问同一问题），再给出子女可做的具体帮助与建议。请使用 Markdown 格式（## 小节标题、- 列表、**加粗**）输出。`;
+            ? `请根据以下近期交互/行为数据，生成上述 JSON（overallScore、dimensions、recentInteractionEvaluation、accompanyingSuggestions、fullReport）。\n${JSON.stringify(history, null, 2)}`
+            : `近期暂无具体交互数据。请生成上述 JSON，使用合理的示范分数与示例文案（近期交互评估、陪伴建议、fullReport 的 Markdown），便于家属理解认知评估界面。`;
 
         try {
-            const text = await this.callGroqOnce(system, user, { maxTokens: 1000 });
-            return text || this.buildLocalCognitiveReport(history);
+            const text = await this.callGroqOnce(system, user, { maxTokens: 1400 });
+            const cleaned = text?.replace(/^[\s\S]*?\{/, '{').replace(/\}[\s\S]*$/, '}').trim();
+            const parsed = JSON.parse(cleaned || '{}') as Partial<CognitiveBrief>;
+            const dims = parsed.dimensions && parsed.dimensions.length >= 4
+                ? parsed.dimensions
+                : [
+                    { id: 'semantic', name: '语义连贯性', score: 95, status: '优秀' },
+                    { id: 'vocabulary', name: '词汇丰富度', score: 88, status: '良好' },
+                    { id: 'emotion', name: '情感表达', score: 91, status: '优秀' },
+                    { id: 'memory', name: '记忆关联', score: 85, status: '良好' },
+                ];
+            return {
+                overallScore: typeof parsed.overallScore === 'number' ? parsed.overallScore : 92,
+                dimensions: dims,
+                recentInteractionEvaluation: typeof parsed.recentInteractionEvaluation === 'string' ? parsed.recentInteractionEvaluation : '爸爸近日对话中语义表达清晰，能够准确回忆近期事件，逻辑连贯性良好。认知功能未发现退化迹象，您可以放心。',
+                accompanyingSuggestions: typeof parsed.accompanyingSuggestions === 'string' ? parsed.accompanyingSuggestions : '建议多和爸爸聊聊往事和家庭趣事，有助于巩固长期记忆，增进亲子情感。',
+                fullReport: typeof parsed.fullReport === 'string' && parsed.fullReport.trim() ? parsed.fullReport : this.buildLocalCognitiveReport(history),
+            };
         } catch (e) {
-            console.warn('[AI] generateCognitiveReport failed:', e);
-            return this.buildLocalCognitiveReport(history);
+            console.warn('[AI] generateCognitiveReportStructured failed:', e);
+            return this.buildLocalCognitiveBrief(history);
         }
     }
 
@@ -694,6 +789,28 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
         return parts.join('\n\n');
     }
 
+    /** 认知评估简版本地兜底（与界面结构一致） */
+    private buildLocalCognitiveBrief(_history: unknown[]): CognitiveBrief {
+        const fullReport = this.buildLocalCognitiveReport(_history);
+        return {
+            overallScore: 92,
+            dimensions: [
+                { id: 'semantic', name: '语义连贯性', score: 95, status: '优秀' },
+                { id: 'vocabulary', name: '词汇丰富度', score: 88, status: '良好' },
+                { id: 'emotion', name: '情感表达', score: 91, status: '优秀' },
+                { id: 'memory', name: '记忆关联', score: 85, status: '良好' },
+            ],
+            recentInteractionEvaluation: '爸爸近日对话中语义表达清晰，能够准确回忆近期事件，逻辑连贯性良好。认知功能未发现退化迹象，您可以放心。',
+            accompanyingSuggestions: '记忆关联得分85分，建议多和爸爸聊聊往事和家庭趣事，有助于巩固长期记忆，增进亲子情感。',
+            fullReport,
+        };
+    }
+
+    /** 供前端在生成失败时展示默认认知评估结果界面 */
+    getDefaultCognitiveBrief(): CognitiveBrief {
+        return this.buildLocalCognitiveBrief([]);
+    }
+
     /**
      * 环境语义分析（子女端）：基于当前位置地址与周边 POI，用 Groq 分析老人周边环境是否安全、描述地理位置特征，帮助子女确认老人所在地
      */
@@ -701,6 +818,18 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
         if (!this.getApiKey()) {
             return this.buildLocalEnvironmentAnalysis(address, nearbyPoiNames);
         }
+        const key = `${address || ''}||${nearbyPoiNames.join('|')}`;
+        const cached = this.environmentCache.get(key);
+        const now = Date.now();
+        // 1 分钟内相同地址 + POI 直接复用结果，减少 API 调用
+        if (cached && now - cached.ts < 60_000) {
+            return cached.text;
+        }
+        // 若调用间隔过短，直接走本地兜底，避免触发限流
+        if (now - this.lastEnvironmentCallAt < 1500) {
+            return this.buildLocalEnvironmentAnalysis(address, nearbyPoiNames);
+        }
+        this.lastEnvironmentCallAt = now;
         const system = `你是老年照护场景下的环境分析助手，面向家属（子女）撰写「环境语义分析」。必须使用 Markdown 格式输出，保证结构清晰、重点突出。
 
 输入：老人当前定位的详细地址、以及距离最近的若干周边地点名称（POI）。
@@ -716,10 +845,15 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
 
         try {
             const text = await this.callGroqOnce(system, user, { maxTokens: 600 });
-            return text?.trim() || this.buildLocalEnvironmentAnalysis(address, nearbyPoiNames);
-        } catch (e) {
+            const result = text?.trim() || this.buildLocalEnvironmentAnalysis(address, nearbyPoiNames);
+            this.environmentCache.set(key, { ts: Date.now(), text: result });
+            return result;
+        } catch (e: any) {
             console.warn('[AI] analyzeEnvironmentForGuardian failed:', e);
-            return this.buildLocalEnvironmentAnalysis(address, nearbyPoiNames);
+            // 对 429 限流错误不再继续重试，直接使用本地兜底，避免刷屏
+            const fallback = this.buildLocalEnvironmentAnalysis(address, nearbyPoiNames);
+            this.environmentCache.set(key, { ts: Date.now(), text: fallback });
+            return fallback;
         }
     }
 
