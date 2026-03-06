@@ -10,6 +10,7 @@ export enum SimulationType {
   WANDERING = 'WANDERING',
   FALL = 'FALL',
   MEDICATION = 'MEDICATION',
+  SUNDOWNING = 'SUNDOWNING',
   // New Voice Command Scenarios
   VOICE_NAV_START = 'VOICE_NAV_START',
   VOICE_MEMORY_START = 'VOICE_MEMORY_START',

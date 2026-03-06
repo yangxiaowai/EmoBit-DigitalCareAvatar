@@ -414,9 +414,10 @@ const AvatarStatus3D: React.FC<AvatarStatus3DProps> = ({ status, healthState, si
 
             // 颤抖效果（低血氧、疲劳时）
             const tremorOffset = tremor > 0 ? {
-                x: (Math.random() - 0.5) * 0.015 * tremor,
-                y: (Math.random() - 0.5) * 0.01 * tremor,
-                z: (Math.random() - 0.5) * 0.008 * tremor,
+                // 仅保留轻微上下抖动，避免左右晃动造成惊吓感
+                x: 0,
+                y: Math.sin(t * 10) * 0.004 * tremor,
+                z: 0,
             } : { x: 0, y: 0, z: 0 };
 
             if (status === SystemStatus.NORMAL) {
@@ -495,24 +496,24 @@ const AvatarStatus3D: React.FC<AvatarStatus3DProps> = ({ status, healthState, si
                 // 胸部呼吸时的轻微前后移动
                 body.position.z = Math.sin(t * breathSpeed) * breathDepth * 0.5;
             } else if (status === SystemStatus.WARNING) {
-                // 警告状态 - 动作加剧，颤抖增加
-                const warningTremor = 0.4;
-                charGroup.position.y = Math.sin(t * 3.0) * 0.08 + (Math.random() - 0.5) * 0.02 * warningTremor;
-                charGroup.rotation.y = Math.sin(t * 2.0) * 0.15 + (Math.random() - 0.5) * 0.03 * warningTremor;
-                charGroup.rotation.z = (Math.random() - 0.5) * 0.02 * warningTremor;
-                head.rotation.y = Math.sin(t * 4.0) * 0.2;
-                head.rotation.x = headTilt * 0.25;
-                body.scale.y = 1.1 + Math.sin(t * 3.0) * 0.04; // 急促呼吸
-                body.position.z = Math.sin(t * 3.0) * 0.015;
+                // 警告状态：保持克制，仅表现焦虑（不左右颤抖）
+                charGroup.position.y = -0.08 + Math.sin(t * 1.4) * 0.03;
+                charGroup.rotation.y = Math.sin(t * 0.6) * 0.05;
+                charGroup.rotation.z = 0;
+                charGroup.rotation.x = 0.08 + shoulderSlump * 0.05;
+                head.rotation.y = Math.sin(t * 0.9) * 0.08;
+                head.rotation.x = 0.12 + headTilt * 0.2;
+                body.scale.y = 1.1 + Math.sin(t * 3.2) * 0.03; // 呼吸偏快
+                body.position.z = Math.sin(t * 3.2) * 0.01;
             } else if (status === SystemStatus.CRITICAL) {
-                // 危急状态 - 身体下沉，剧烈颤抖
-                const criticalTremor = 0.8;
-                charGroup.position.y = -0.5 + Math.sin(t * 5.0) * 0.02 + (Math.random() - 0.5) * 0.03 * criticalTremor;
-                charGroup.rotation.z = Math.sin(t * 8.0) * 0.05 + (Math.random() - 0.5) * 0.04 * criticalTremor;
-                charGroup.rotation.x = 0.2 + shoulderSlump * 0.2;
-                head.rotation.x = 0.4 + headTilt * 0.4; // 头部严重下垂
-                body.scale.y = 1.1 + Math.sin(t * 5.0) * 0.05; // 非常急促
-                body.position.z = Math.sin(t * 5.0) * 0.02;
+                // 高风险状态：更紧张但不“抖”，避免夸张表现
+                charGroup.position.y = -0.12 + Math.sin(t * 1.1) * 0.02;
+                charGroup.rotation.y = Math.sin(t * 0.4) * 0.04;
+                charGroup.rotation.z = 0;
+                charGroup.rotation.x = 0.12 + shoulderSlump * 0.1;
+                head.rotation.x = 0.18 + headTilt * 0.22;
+                body.scale.y = 1.1 + Math.sin(t * 3.8) * 0.035;
+                body.position.z = Math.sin(t * 3.8) * 0.012;
             }
 
             // 面部表情调整（眉毛位置）

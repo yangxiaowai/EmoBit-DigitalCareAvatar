@@ -6,12 +6,18 @@ import { VoiceService, AvatarService } from '../services/api';
 import { aiService, type CognitiveBrief } from '../services/aiService';
 import { voiceSelectionService } from '../services/voiceSelectionService';
 import { blobToWav, getAudioDurationSeconds } from '../utils/audioUtils';
-import { healthStateService, HealthMetrics, HEALTHY_VITALS, SUBHEALTHY_VITALS } from '../services/healthStateService';
+import { healthStateService, HealthMetrics, HEALTHY_VITALS, SUBHEALTHY_VITALS, AvatarState } from '../services/healthStateService';
 import { mapService } from '../services/mapService';
 import { medicationService, Medication } from '../services/medicationService';
 import { faceService, FaceData } from '../services/faceService';
 import { ALBUM_MEMORIES } from '../config/albumMemories';
 import { FACE_RECOGNITION_CONFIG } from '../config/faceRecognition';
+import {
+    sundowningService,
+    SundowningInterventionPlan,
+    SundowningPushAlert,
+    SundowningRiskSnapshot,
+} from '../services/sundowningService';
 import { ShieldCheck, MapPin, Heart, Pill, AlertTriangle, Phone, Activity, Clock, User, Calendar, LayoutGrid, FileText, Settings, ChevronRight, Eye, Brain, Layers, Play, Pause, SkipBack, SkipForward, History, AlertCircle, Signal, Wifi, Battery, Moon, Footprints, Sun, Cloud, ArrowLeft, Mic, Upload, Sparkles, CheckCircle, Volume2, ToggleRight, Loader2, ScanFace, Box, Wand2, Plus, X, Users, Camera, TrendingUp, BookOpen, MessageCircle, MessageSquare, Link2, ArrowUpRight } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, AreaChart, Area, BarChart, Bar, CartesianGrid } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -707,6 +713,76 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
     const [avatarState, setAvatarState] = useState<AvatarState>(healthStateService.getAvatarState());
     const [currentMetrics, setCurrentMetrics] = useState<HealthMetrics>({ ...HEALTHY_VITALS });
     const [activePreset, setActivePreset] = useState<'healthy' | 'subhealthy'>('healthy');
+    const [sundowningSnapshot, setSundowningSnapshot] = useState<SundowningRiskSnapshot>(sundowningService.getCurrentSnapshot());
+    const [sundowningHistory, setSundowningHistory] = useState<SundowningRiskSnapshot[]>(sundowningService.getRiskHistory(24));
+    const [sundowningAlerts, setSundowningAlerts] = useState<SundowningPushAlert[]>(sundowningService.getAlerts(6));
+    const [sundowningPlan, setSundowningPlan] = useState<SundowningInterventionPlan | null>(sundowningService.getActiveIntervention());
+    const [interventionFlash, setInterventionFlash] = useState<string | null>(null);
+
+    // 黄昏风险可视化覆盖：中/高风险时即使全局未升为 WARNING，也让 3D 小人进入警惕状态
+    const avatarVisualStatus = useMemo<SystemStatus>(() => {
+        if (status === SystemStatus.CRITICAL || sundowningSnapshot.riskLevel === 'high') return SystemStatus.CRITICAL;
+        if (status === SystemStatus.WARNING || sundowningSnapshot.riskLevel === 'medium') return SystemStatus.WARNING;
+        return SystemStatus.NORMAL;
+    }, [status, sundowningSnapshot.riskLevel]);
+
+    const effectiveAvatarState = useMemo<AvatarState>(() => {
+        if (sundowningSnapshot.riskLevel === 'high') {
+            return {
+                ...avatarState,
+                mood: 'worried',
+                alertLevel: 'critical',
+                facialExpression: 'pained',
+                breathingRate: 'rapid',
+                sweating: Math.max(avatarState.sweating ?? 0, 0.5),
+                tremor: 0,
+                heartbeatIntensity: Math.max(avatarState.heartbeatIntensity ?? 0.3, 0.75),
+                templeVeinPulse: Math.max(avatarState.templeVeinPulse ?? 0, 0.65),
+                overallHealthGlow: 'red',
+                eyeState: 'wide',
+                bodyStability: Math.max(avatarState.bodyStability ?? 0.8, 0.92),
+                message: '黄昏高风险，已触发主动安抚干预',
+            };
+        }
+        if (sundowningSnapshot.riskLevel === 'medium') {
+            return {
+                ...avatarState,
+                mood: 'worried',
+                alertLevel: avatarState.alertLevel === 'critical' ? 'critical' : 'warning',
+                facialExpression: 'distressed',
+                breathingRate: avatarState.breathingRate === 'rapid' ? 'rapid' : 'fast',
+                sweating: Math.max(avatarState.sweating ?? 0, 0.28),
+                tremor: 0,
+                heartbeatIntensity: Math.max(avatarState.heartbeatIntensity ?? 0.3, 0.55),
+                overallHealthGlow: 'orange',
+                eyeState: avatarState.eyeState === 'closed' ? 'droopy' : avatarState.eyeState,
+                bodyStability: Math.max(avatarState.bodyStability ?? 0.8, 0.9),
+                message: '黄昏风险上升，建议尽快安抚与陪伴',
+            };
+        }
+        return avatarState;
+    }, [avatarState, sundowningSnapshot.riskLevel]);
+
+    const guardDotColorClass =
+        avatarVisualStatus === SystemStatus.CRITICAL
+            ? 'bg-rose-500'
+            : avatarVisualStatus === SystemStatus.WARNING
+                ? 'bg-amber-500'
+                : 'bg-emerald-500';
+
+    const guardLabel =
+        avatarVisualStatus === SystemStatus.CRITICAL
+            ? '黄昏高风险干预中'
+            : avatarVisualStatus === SystemStatus.WARNING
+                ? '黄昏风险上升'
+                : '实时守护中';
+
+    const handleManualIntervention = () => {
+        const plan = sundowningService.triggerIntervention(undefined, 'manual');
+        if (!plan) return;
+        setInterventionFlash(`已启动：${plan.title}`);
+        setTimeout(() => setInterventionFlash(null), 2200);
+    };
 
     // 订阅健康状态变化
     useEffect(() => {
@@ -718,6 +794,33 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         healthStateService.updateMetrics(currentMetrics);
         
         return unsubscribe;
+    }, []);
+
+    // 黄昏守护订阅：风险趋势 + 推送 + 当前干预
+    useEffect(() => {
+        const unsubscribeSnapshot = sundowningService.subscribe((snapshot) => {
+            setSundowningSnapshot(snapshot);
+            setSundowningHistory(sundowningService.getRiskHistory(24));
+        });
+
+        const unsubscribeAlerts = sundowningService.subscribeAlerts(() => {
+            setSundowningAlerts(sundowningService.getAlerts(6));
+        });
+
+        const unsubscribeIntervention = sundowningService.subscribeInterventions((plan) => {
+            setSundowningPlan(plan);
+        });
+
+        const timer = setInterval(() => {
+            sundowningService.evaluateRisk();
+        }, 5000);
+
+        return () => {
+            unsubscribeSnapshot();
+            unsubscribeAlerts();
+            unsubscribeIntervention();
+            clearInterval(timer);
+        };
     }, []);
 
     // Clock & Greeting
@@ -1656,6 +1759,19 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         );
     };
 
+    const sundowningTrendData = useMemo(() => {
+        const history = sundowningHistory.slice(-24);
+        if (history.length === 0) {
+            return [{ ts: Date.now(), timeLabel: '--:--:--', risk: 0, threshold: 70 }];
+        }
+        return history.map((item) => ({
+            ts: item.timestamp,
+            timeLabel: new Date(item.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            risk: item.riskScore,
+            threshold: 70,
+        }));
+    }, [sundowningHistory]);
+
     const OverviewTab = () => (
         <div className="flex flex-col gap-6 pb-28 p-5 animate-fade-in-up">
             {/* Header Section */}
@@ -1675,41 +1791,145 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
 
             {/* 3D 老年数字人 Hero 状态卡片 - 尽量占满模块 */}
             <div className={`relative overflow-hidden rounded-[2.5rem] p-4 shadow-xl transition-all duration-700 group flex flex-col items-center ${
-                status === SystemStatus.CRITICAL ? 'bg-gradient-to-br from-rose-500 to-red-600 shadow-rose-200' :
-                status === SystemStatus.WARNING ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-orange-200' :
+                avatarVisualStatus === SystemStatus.CRITICAL ? 'bg-gradient-to-br from-rose-500 to-red-600 shadow-rose-200' :
+                avatarVisualStatus === SystemStatus.WARNING ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-orange-200' :
                 'bg-white border border-slate-100 shadow-lg shadow-slate-100'
             }`}>
                 {/* 状态角标 - 左上角 */}
                 <div className={`absolute top-4 left-4 z-20 flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full shadow-sm ${
-                    status === SystemStatus.NORMAL ? 'bg-slate-50 border border-slate-100' : 'bg-white/20 backdrop-blur-md border border-white/30'
+                    avatarVisualStatus === SystemStatus.NORMAL ? 'bg-slate-50 border border-slate-100' : 'bg-white/20 backdrop-blur-md border border-white/30'
                 }`}>
                     <div className="relative flex items-center justify-center w-5 h-5">
-                        <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${status === SystemStatus.NORMAL ? 'bg-emerald-500' : 'bg-emerald-400'}`}></span>
-                        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${status === SystemStatus.NORMAL ? 'bg-emerald-500' : 'bg-emerald-500'}`}></span>
+                        <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${guardDotColorClass}`}></span>
+                        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${guardDotColorClass}`}></span>
                     </div>
-                    <span className={`text-xs font-bold tracking-widest ${status === SystemStatus.NORMAL ? 'text-slate-600' : 'text-white text-shadow-sm'}`}>实时守护中</span>
+                    <span className={`text-xs font-bold tracking-widest ${avatarVisualStatus === SystemStatus.NORMAL ? 'text-slate-600' : 'text-white text-shadow-sm'}`}>{guardLabel}</span>
                 </div>
 
-                <div className={`absolute top-0 right-0 -mr-12 -mt-12 w-64 h-64 opacity-5 rounded-full blur-3xl ${status === SystemStatus.NORMAL ? 'bg-indigo-500' : 'bg-white'}`}></div>
+                <div className={`absolute top-0 right-0 -mr-12 -mt-12 w-64 h-64 opacity-5 rounded-full blur-3xl ${avatarVisualStatus === SystemStatus.NORMAL ? 'bg-indigo-500' : 'bg-white'}`}></div>
 
                 {/* 3D 数字人容器：尽量占满模块，居中显示 */}
                 <div className="relative z-10 w-full min-h-[260px] flex items-center justify-center overflow-hidden py-2">
                     <div className="relative w-full max-w-[300px] aspect-square flex items-center justify-center mx-auto">
-                        <div className={`absolute inset-0 rounded-full blur-2xl animate-pulse ${status === SystemStatus.NORMAL ? 'bg-slate-100' : 'bg-white/5'}`}></div>
-                        <div className={`absolute inset-0 rounded-full backdrop-blur-sm border ${status === SystemStatus.NORMAL ? 'bg-white/50 border-slate-100' : 'bg-gradient-to-tr from-white/10 to-transparent border-white/10'}`}></div>
-                        <div className={`absolute inset-1 border-2 border-dashed rounded-full animate-spin-slow opacity-60 ${status === SystemStatus.NORMAL ? 'border-indigo-200/50' : 'border-white/40'}`}></div>
+                        <div className={`absolute inset-0 rounded-full blur-2xl animate-pulse ${avatarVisualStatus === SystemStatus.NORMAL ? 'bg-slate-100' : 'bg-white/5'}`}></div>
+                        <div className={`absolute inset-0 rounded-full backdrop-blur-sm border ${avatarVisualStatus === SystemStatus.NORMAL ? 'bg-white/50 border-slate-100' : 'bg-gradient-to-tr from-white/10 to-transparent border-white/10'}`}></div>
+                        <div className={`absolute inset-1 border-2 border-dashed rounded-full animate-spin-slow opacity-60 ${
+                            avatarVisualStatus === SystemStatus.CRITICAL
+                                ? 'border-rose-200/70'
+                                : avatarVisualStatus === SystemStatus.WARNING
+                                    ? 'border-amber-200/70'
+                                    : 'border-indigo-200/50'
+                        }`}></div>
                         <div className={`absolute inset-2 rounded-full border overflow-hidden flex items-center justify-center ${
-                            status === SystemStatus.NORMAL ? 'bg-slate-50 border-white shadow-[inset_0_4px_20px_rgba(0,0,0,0.05)]' : 'bg-gradient-to-b from-white/20 to-white/5 border-white/30'
+                            avatarVisualStatus === SystemStatus.NORMAL ? 'bg-slate-50 border-white shadow-[inset_0_4px_20px_rgba(0,0,0,0.05)]' : 'bg-gradient-to-b from-white/20 to-white/5 border-white/30'
                         }`}>
-                            <AvatarStatus3D status={status} healthState={avatarState} size={260} />
+                            <AvatarStatus3D status={avatarVisualStatus} healthState={effectiveAvatarState} size={260} />
                         </div>
 
-                        {status !== SystemStatus.NORMAL && (
+                        {avatarVisualStatus !== SystemStatus.NORMAL && (
                             <div className="absolute top-1 right-1 bg-white rounded-full p-1.5 shadow-lg border-2 border-red-500 z-30">
                                 <AlertTriangle size={18} className="text-red-600 animate-pulse" />
                             </div>
                         )}
                     </div>
+                </div>
+            </div>
+
+            {/* 黄昏守护：风险趋势 + 实时推送 */}
+            <div className="bg-white rounded-[2rem] p-4 border border-slate-100 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.15)]">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                            <Moon size={15} className="text-indigo-500" />
+                            黄昏守护风险趋势
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">高危窗口 16:00-19:00，风险指数会结合行为信号动态更新</p>
+                    </div>
+                    <div className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                        sundowningSnapshot.riskLevel === 'high'
+                            ? 'bg-rose-100 text-rose-700'
+                            : sundowningSnapshot.riskLevel === 'medium'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-emerald-100 text-emerald-700'
+                    }`}>
+                        {sundowningSnapshot.riskLevel === 'high' ? '高风险' : sundowningSnapshot.riskLevel === 'medium' ? '中风险' : '低风险'}
+                        {' · '}
+                        {sundowningSnapshot.riskScore}
+                    </div>
+                </div>
+
+                <div className="h-28 mt-3">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={sundowningTrendData} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                            <XAxis
+                                dataKey="ts"
+                                type="number"
+                                domain={['dataMin', 'dataMax']}
+                                tick={{ fontSize: 10, fill: '#64748B' }}
+                                axisLine={false}
+                                tickLine={false}
+                                tickFormatter={(v: number) => new Date(v).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            />
+                            <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                            <Tooltip
+                                contentStyle={{ borderRadius: 10, border: '1px solid #E2E8F0', fontSize: 12 }}
+                                formatter={(value: any) => [`${value}`, '风险指数']}
+                                labelFormatter={(label: any) => `时间 ${new Date(Number(label)).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
+                            />
+                            <Line type="monotone" dataKey="threshold" stroke="#CBD5E1" strokeDasharray="4 4" dot={false} strokeWidth={1.5} />
+                            <Line
+                                type="monotone"
+                                dataKey="risk"
+                                stroke={
+                                    sundowningSnapshot.riskLevel === 'high'
+                                        ? '#E11D48'
+                                        : sundowningSnapshot.riskLevel === 'medium'
+                                            ? '#D97706'
+                                            : '#16A34A'
+                                }
+                                dot={false}
+                                strokeWidth={2.5}
+                            />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                    <div className="rounded-xl bg-slate-50 border border-slate-100 p-2.5">
+                        <p className="text-[10px] text-slate-400 mb-1">关键触发</p>
+                        <p className="text-xs font-medium text-slate-700">
+                            {sundowningSnapshot.keyFactors[0] ?? '暂无'}
+                        </p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-100 p-2.5">
+                        <p className="text-[10px] text-slate-400 mb-1">主动干预</p>
+                        <p className="text-xs font-medium text-slate-700">
+                            {sundowningPlan?.status === 'running' ? sundowningPlan.title : '待命中'}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                    <p className="text-[11px] font-semibold text-slate-500">实时推送</p>
+                    {sundowningAlerts.slice(0, 2).map((alert) => (
+                        <div key={alert.id} className={`rounded-xl px-3 py-2 border ${
+                            alert.level === 'high' ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'
+                        }`}>
+                            <div className="flex items-center justify-between gap-2">
+                                <p className={`text-xs font-semibold ${alert.level === 'high' ? 'text-rose-700' : 'text-amber-700'}`}>{alert.title}</p>
+                                <span className="text-[10px] text-slate-500">
+                                    {new Date(alert.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 mt-1">{alert.message}</p>
+                        </div>
+                    ))}
+                    {sundowningAlerts.length === 0 && (
+                        <div className="rounded-xl px-3 py-2 border bg-emerald-50 border-emerald-100 text-[11px] text-emerald-700">
+                            暂无黄昏异常推送，当前守护状态稳定。
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -1728,7 +1948,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
 
                     {/* Floating Status Badge */}
                     <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl shadow-sm text-xs font-bold text-slate-700 flex items-center gap-2 border border-white/50">
-                        <div className={`w-2 h-2 rounded-full animate-pulse ${status === SystemStatus.WARNING ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${avatarVisualStatus === SystemStatus.NORMAL ? 'bg-emerald-500' : avatarVisualStatus === SystemStatus.WARNING ? 'bg-amber-500' : 'bg-rose-500'}`}></div>
                         {simulation === SimulationType.WANDERING ? '离家 1.2km (异常)' : '在家中 (安全)'}
                     </div>
                 </div>
@@ -2906,6 +3126,49 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                         <ArrowLeft size={14} /> 返回当前位置
                     </button>
                 </div>
+
+                <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 pt-2 border-t border-slate-200">
+                    <Moon size={14} /> 黄昏守护模拟
+                </h3>
+                <div className="flex flex-col gap-2">
+                    <button
+                        onClick={() => sundowningService.startSimulation()}
+                        className="px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl shadow-sm active:scale-95 transition-all text-left"
+                    >
+                        🌆 模拟: 风险持续上升
+                    </button>
+                    <button
+                        onClick={handleManualIntervention}
+                        disabled={sundowningPlan?.status === 'running'}
+                        className="px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white text-xs font-bold rounded-xl shadow-sm active:scale-95 transition-all text-left"
+                    >
+                        {sundowningPlan?.status === 'running' ? '🤖 主动干预执行中…' : '🤖 立即执行主动干预'}
+                    </button>
+                    <button
+                        onClick={() => {
+                            sundowningService.stopSimulation();
+                            sundowningService.completeActiveIntervention('calmed');
+                        }}
+                        className="px-4 py-2.5 bg-slate-500 hover:bg-slate-600 text-white text-xs font-bold rounded-xl shadow-sm active:scale-95 transition-all text-left"
+                    >
+                        ✅ 停止黄昏模拟
+                    </button>
+                </div>
+                <div className={`rounded-xl p-3 text-xs border ${
+                    sundowningSnapshot.riskLevel === 'high'
+                        ? 'bg-rose-50 border-rose-100 text-rose-700'
+                        : sundowningSnapshot.riskLevel === 'medium'
+                            ? 'bg-amber-50 border-amber-100 text-amber-700'
+                            : 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                }`}>
+                    当前风险：{sundowningSnapshot.riskScore}（{sundowningSnapshot.riskLevel === 'high' ? '高' : sundowningSnapshot.riskLevel === 'medium' ? '中' : '低'}）
+                    {sundowningPlan?.status === 'running' ? ` · 干预中：${sundowningPlan.title}` : ' · 干预待命'}
+                </div>
+                {interventionFlash && (
+                    <div className="rounded-xl p-2.5 text-xs border bg-indigo-50 border-indigo-100 text-indigo-700">
+                        {interventionFlash}
+                    </div>
+                )}
 
                 <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 pt-2 border-t border-slate-200">
                     <Activity size={14} /> 健康数据模拟

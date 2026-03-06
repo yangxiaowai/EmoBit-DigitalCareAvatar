@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard';
 import ElderlyApp from './components/ElderlyApp';
 import { SimulationType, LogEntry, SystemStatus } from './types';
 import { Terminal, Activity, Bell, Smartphone, LayoutDashboard } from 'lucide-react';
+import { sundowningService } from './services/sundowningService';
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<'dashboard' | 'app'>('dashboard');
@@ -42,6 +43,10 @@ const App: React.FC = () => {
         addLog('CV_CAMERA', '检测到药盒交互。置信度: 98%。', 'success');
         addLog('WATCH', '识别到“吞咽”手势。', 'success');
         break;
+      case SimulationType.SUNDOWNING:
+        setSystemStatus(SystemStatus.WARNING);
+        addLog('SUNDOWNING', '进入黄昏高风险时段，已启动主动干预策略。', 'warn');
+        break;
       default:
         setSystemStatus(SystemStatus.NORMAL);
         addLog('SYSTEM', '系统重置。监控已激活。', 'info');
@@ -53,8 +58,39 @@ const App: React.FC = () => {
     addLog('BOOT', '系统初始化完成。正在连接穿戴设备...', 'info');
     setTimeout(() => addLog('NETWORK', '5G 模组已连接。延迟: 12ms', 'success'), 800);
     setTimeout(() => addLog('AI_CORE', 'Gemini Nano 模型已加载至边缘端。', 'info'), 1500);
+    setTimeout(() => addLog('SUNDOWNING', '黄昏守护引擎已启动。', 'info'), 1800);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 黄昏守护：将风险快照与实时预警接入系统状态/日志
+  useEffect(() => {
+    const unsubscribeSnapshot = sundowningService.subscribe((snapshot) => {
+      setSystemStatus((prev) => {
+        // 其他严重告警优先，避免被黄昏状态覆盖
+        if (prev === SystemStatus.CRITICAL) return prev;
+        if (snapshot.riskLevel === 'high') return SystemStatus.WARNING;
+        if (snapshot.riskLevel === 'low' && simulation === SimulationType.NONE) return SystemStatus.NORMAL;
+        return prev;
+      });
+    });
+
+    const unsubscribeAlert = sundowningService.subscribeAlerts((alert) => {
+      addLog(
+        'SUNDOWNING',
+        `${alert.title}：${alert.message}`,
+        alert.level === 'high' ? 'error' : 'warn'
+      );
+
+      if (alert.level === 'high') {
+        setSystemStatus((prev) => (prev === SystemStatus.CRITICAL ? prev : SystemStatus.WARNING));
+      }
+    });
+
+    return () => {
+      unsubscribeSnapshot();
+      unsubscribeAlert();
+    };
+  }, [addLog, simulation]);
 
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans text-slate-900">

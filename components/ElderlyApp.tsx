@@ -16,6 +16,13 @@ import { homeArrivalService } from '../services/homeArrivalService';
 import { medicationService } from '../services/medicationService';
 import { faceService, FaceData } from '../services/faceService';
 import { cognitiveService } from '../services/cognitiveService';
+import {
+    sundowningService,
+    SundowningInterventionPlan,
+    SundowningInterventionType,
+    SundowningPushAlert,
+    SundowningRiskSnapshot,
+} from '../services/sundowningService';
 import AvatarCreator from './AvatarCreator';
 import ARNavigationOverlay from './ARNavigationOverlay';
 import WanderingAlert from './WanderingAlert';
@@ -911,6 +918,13 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
     // 认知报告状态
     const [showCognitiveReport, setShowCognitiveReport] = useState(false);
 
+    // 黄昏守护状态
+    const [sundowningSnapshot, setSundowningSnapshot] = useState<SundowningRiskSnapshot>(sundowningService.getCurrentSnapshot());
+    const [sundowningAlerts, setSundowningAlerts] = useState<SundowningPushAlert[]>(sundowningService.getAlerts(3));
+    const [activeSundowningPlan, setActiveSundowningPlan] = useState<SundowningInterventionPlan | null>(sundowningService.getActiveIntervention());
+    const [showBreathingGuide, setShowBreathingGuide] = useState(false);
+    const [breathingGuideIndex, setBreathingGuideIndex] = useState(0);
+
     // 输入模式：voice=长按说话, keyboard=键盘输入
     const [useKeyboardInput, setUseKeyboardInput] = useState(false);
     const [textInputValue, setTextInputValue] = useState('');
@@ -921,6 +935,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
 
     // Auto-scroll ref
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const recentVoiceInputsRef = useRef<string[]>([]);
     useEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -1019,9 +1034,85 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
         };
     }, []);
 
+    // 黄昏守护订阅：风险快照、预警推送、主动干预
+    useEffect(() => {
+        const unsubscribeSnapshot = sundowningService.subscribe((snapshot) => {
+            setSundowningSnapshot(snapshot);
+        });
+
+        const unsubscribeAlerts = sundowningService.subscribeAlerts((alert) => {
+            setSundowningAlerts(sundowningService.getAlerts(3));
+        });
+
+        const unsubscribeIntervention = sundowningService.subscribeInterventions((plan) => {
+            setActiveSundowningPlan(plan);
+            if (!plan || plan.status !== 'running') return;
+
+            setVoiceInputDisplay(null);
+            setIsListening(false);
+            setIsThinking(false);
+            setAiMessage(plan.script);
+            setIsTalking(true);
+
+            if (plan.type === 'breathing_exercise') {
+                setShowBreathingGuide(true);
+                setBreathingGuideIndex(0);
+            } else {
+                setShowBreathingGuide(false);
+            }
+
+            VoiceService.stop();
+            VoiceService.speakSegments(plan.script, undefined, undefined, () => {
+                setIsTalking(false);
+                if (plan.type !== 'breathing_exercise') {
+                    sundowningService.completeActiveIntervention('done');
+                }
+            });
+
+            if (plan.type === 'family_album_story') {
+                setTimeout(() => {
+                    setActiveScenario('memory');
+                    setStep(0);
+                }, 900);
+            }
+        });
+
+        const riskTimer = setInterval(() => {
+            sundowningService.evaluateRisk();
+        }, 20000);
+
+        return () => {
+            unsubscribeSnapshot();
+            unsubscribeAlerts();
+            unsubscribeIntervention();
+            clearInterval(riskTimer);
+        };
+    }, []);
+
+    // 呼吸练习引导：吸气 4 秒 -> 停 2 秒 -> 呼气 6 秒
+    const breathingGuideSteps = ['吸气 4 秒', '屏息 2 秒', '呼气 6 秒'];
+    useEffect(() => {
+        if (!showBreathingGuide) return;
+
+        const cycleTimer = setInterval(() => {
+            setBreathingGuideIndex((prev) => (prev + 1) % breathingGuideSteps.length);
+        }, 3000);
+
+        const finishTimer = setTimeout(() => {
+            setShowBreathingGuide(false);
+            sundowningService.completeActiveIntervention('calmed');
+        }, 24000);
+
+        return () => {
+            clearInterval(cycleTimer);
+            clearTimeout(finishTimer);
+        };
+    }, [showBreathingGuide]);
+
     // --- Logic: Handle External Simulations & Voice Triggers ---
     useEffect(() => {
         if (simulation === SimulationType.NONE) {
+            sundowningService.stopSimulation();
             setActiveScenario('none');
             setStep(0);
             setVoiceInputDisplay(null);
@@ -1036,9 +1127,13 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
             triggerVoiceCommand("听听照片回忆", 'memory', "没问题，让我们一起翻翻老照片。");
         } else if (simulation === SimulationType.VOICE_MEDS_START) {
             triggerVoiceCommand("这药怎么吃？", 'meds', "我来帮您看看。请把药盒拿出来。");
+        } else if (simulation === SimulationType.SUNDOWNING) {
+            sundowningService.startSimulation();
+            setAiMessage('已进入黄昏守护模式，我会更主动地陪伴您。');
         }
         // Handle Emergency Scenarios (Existing)
         else if (simulation === SimulationType.FALL || simulation === SimulationType.WANDERING || simulation === SimulationType.MEDICATION) {
+            sundowningService.stopSimulation();
             setActiveScenario('none');
         }
 
@@ -1157,6 +1252,51 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
         }
 
         return { intent: 'unknown' };
+    }, []);
+
+    const clampScore = (v: number) => Math.max(0, Math.min(100, v));
+
+    // 语音输入 -> 黄昏风险行为信号（困惑、重复提问、步态异常线索、焦虑）
+    const buildSundowningSignalFromText = useCallback((text: string) => {
+        const normalized = text.replace(/[，。！？?.!\s]/g, '');
+        if (!normalized) {
+            return {
+                confusionScore: 12,
+                repeatedQuestions: 0,
+                stepAnomalyScore: 20,
+                agitationScore: 15,
+                source: 'voice' as const,
+            };
+        }
+
+        recentVoiceInputsRef.current.push(normalized);
+        if (recentVoiceInputsRef.current.length > 8) {
+            recentVoiceInputsRef.current = recentVoiceInputsRef.current.slice(-8);
+        }
+
+        const duplicateCount = recentVoiceInputsRef.current.filter((t) => t === normalized).length - 1;
+        const repeatedQuestions = Math.max(0, duplicateCount);
+
+        const confusionKeywords = ['我在哪', '这是哪里', '找不到', '迷路', '怎么回家', '回不去', '不认识'];
+        const agitationKeywords = ['着急', '焦虑', '慌', '害怕', '紧张', '烦躁', '不安'];
+        const movementKeywords = ['乱走', '一直走', '走来走去', '出门', '找路', '回家'];
+
+        const confusionByIntent = parseVoiceCommand(text).intent === 'unknown' ? 25 : 0;
+        const confusionByKeyword = confusionKeywords.some(k => text.includes(k)) ? 45 : 10;
+        const agitationByKeyword = agitationKeywords.some(k => text.includes(k)) ? 45 : 15;
+        const stepAnomaly = movementKeywords.some(k => text.includes(k)) ? 60 : 22;
+
+        return {
+            confusionScore: clampScore(confusionByIntent + confusionByKeyword + repeatedQuestions * 10),
+            repeatedQuestions,
+            stepAnomalyScore: clampScore(stepAnomaly + repeatedQuestions * 5),
+            agitationScore: clampScore(agitationByKeyword + repeatedQuestions * 8),
+            source: 'voice' as const,
+        };
+    }, [parseVoiceCommand]);
+
+    const triggerSundowningIntervention = useCallback((type: SundowningInterventionType) => {
+        sundowningService.triggerIntervention(type, 'manual');
     }, []);
 
     // 保存所有中间识别结果（用于整合处理）
@@ -1288,6 +1428,10 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
 
         setVoiceInputDisplay(result.text);
         setIsThinking(true);
+
+        // 记录黄昏行为信号：用于“时间窗口 + 行为趋势”综合风险判断
+        const sundowningSignal = buildSundowningSignalFromText(result.text);
+        sundowningService.recordBehavior(sundowningSignal);
 
         console.log('[ElderlyApp] 正在调用 AI 服务处理:', result.text);
         // EdgeTTS 已移除，不再播放确认音
@@ -1471,7 +1615,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
             // 处理完成后重置标志
             isProcessingRef.current = false;
         }
-    }, []);
+    }, [buildSundowningSignalFromText]);
 
     // 处理语音识别结果 - 使用AI大模型
     const handleSpeechResult = useCallback(async (result: SpeechRecognitionResult) => {
@@ -1884,6 +2028,89 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                             </div>
                         )}
                     </div>
+
+                    {/* 黄昏守护卡片：仅在中/高风险或干预进行时显示 */}
+                    {activeScenario === 'none' && (sundowningSnapshot.riskLevel !== 'low' || activeSundowningPlan?.status === 'running' || showBreathingGuide) && (
+                        <div className="shrink-0 px-4 pb-2 relative z-10">
+                            <div className={`rounded-2xl border p-3 backdrop-blur-sm ${
+                                sundowningSnapshot.riskLevel === 'high'
+                                    ? 'bg-rose-50/90 border-rose-200'
+                                    : sundowningSnapshot.riskLevel === 'medium'
+                                        ? 'bg-amber-50/90 border-amber-200'
+                                        : 'bg-white/70 border-slate-200'
+                            }`}>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[12px] font-bold text-slate-700">黄昏守护</span>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                                            sundowningSnapshot.riskLevel === 'high'
+                                                ? 'bg-rose-100 text-rose-700'
+                                                : sundowningSnapshot.riskLevel === 'medium'
+                                                    ? 'bg-amber-100 text-amber-700'
+                                                    : 'bg-emerald-100 text-emerald-700'
+                                        }`}>
+                                            {sundowningSnapshot.riskLevel === 'high' ? '高风险' : sundowningSnapshot.riskLevel === 'medium' ? '中风险' : '低风险'}
+                                        </span>
+                                    </div>
+                                    <span className="text-[10px] text-slate-500">风险指数 {sundowningSnapshot.riskScore}</span>
+                                </div>
+
+                                <div className="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full transition-all duration-500 ease-out ${
+                                            sundowningSnapshot.riskLevel === 'high'
+                                                ? 'bg-rose-500'
+                                                : sundowningSnapshot.riskLevel === 'medium'
+                                                    ? 'bg-amber-500'
+                                                    : 'bg-emerald-500'
+                                        }`}
+                                        style={{ width: `${Math.max(6, sundowningSnapshot.riskScore)}%` }}
+                                    />
+                                </div>
+
+                                <p className="mt-2 text-[10px] text-slate-600">
+                                    {sundowningSnapshot.keyFactors.slice(0, 2).join('；')}
+                                </p>
+
+                                {activeSundowningPlan?.status === 'running' && (
+                                    <p className="mt-1 text-[10px] font-medium text-indigo-600">
+                                        正在干预：{activeSundowningPlan.title}
+                                    </p>
+                                )}
+
+                                {showBreathingGuide && (
+                                    <div className="mt-2 rounded-xl bg-sky-50 border border-sky-100 px-2.5 py-2">
+                                        <p className="text-[11px] font-semibold text-sky-700">
+                                            呼吸训练：{breathingGuideSteps[breathingGuideIndex]}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {sundowningAlerts[0] && (
+                                    <p className="mt-1 text-[10px] text-slate-500">
+                                        推送：{sundowningAlerts[0].title}
+                                    </p>
+                                )}
+
+                                <div className="mt-2 grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => triggerSundowningIntervention('family_voice_story')}
+                                        className="h-8 rounded-xl bg-indigo-500 text-white text-[11px] font-semibold"
+                                    >
+                                        家属安抚
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => triggerSundowningIntervention('breathing_exercise')}
+                                        className="h-8 rounded-xl bg-sky-500 text-white text-[11px] font-semibold"
+                                    >
+                                        呼吸放松
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* AI 消息展示区域（紧凑） */}
                     {(voiceInputDisplay || aiMessage) && (
