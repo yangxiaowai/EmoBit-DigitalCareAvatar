@@ -1823,7 +1823,14 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                         <div className={`absolute inset-2 rounded-full border overflow-hidden flex items-center justify-center ${
                             avatarVisualStatus === SystemStatus.NORMAL ? 'bg-slate-50 border-white shadow-[inset_0_4px_20px_rgba(0,0,0,0.05)]' : 'bg-gradient-to-b from-white/20 to-white/5 border-white/30'
                         }`}>
-                            <AvatarStatus3D status={avatarVisualStatus} healthState={effectiveAvatarState} size={260} />
+                            <video
+                                src="/elder_avator.mp4"
+                                autoPlay
+                                loop
+                                muted
+                                playsInline
+                                className="w-full h-full object-cover"
+                            />
                         </div>
 
                         {avatarVisualStatus !== SystemStatus.NORMAL && (
