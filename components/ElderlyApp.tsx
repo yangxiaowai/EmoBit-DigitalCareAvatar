@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { SimulationType, SystemStatus, MemoryPhoto } from '../types';
@@ -34,367 +33,30 @@ interface ElderlyAppProps {
     simulation: SimulationType;
 }
 
-// --- 3D Avatar Component (Real-time Render) ---
-const CuteAvatar3D = ({ isTalking, isListening, isThinking }: { isTalking: boolean, isListening: boolean, isThinking?: boolean }) => {
-    const mountRef = useRef<HTMLDivElement>(null);
-    const stateRef = useRef({ isTalking, isListening, isThinking: !!isThinking });
-    stateRef.current = { isTalking, isListening, isThinking: !!isThinking };
-
-    useEffect(() => {
-        const mount = mountRef.current;
-        if (!mount) return;
-
-        // 确保唯一 canvas：清空可能残留的子节点（如 Strict Mode 或清理未完全执行）
-        while (mount.firstChild) mount.removeChild(mount.firstChild);
-
-        // 1. Setup Scene
-        const scene = new THREE.Scene();
-
-        // --- Background Decor (Clouds) ---
-        const bgGroup = new THREE.Group();
-        scene.add(bgGroup);
-
-        const createCloud = (x: number, y: number, z: number, scale: number) => {
-            const cloud = new THREE.Group();
-            const cloudMat = new THREE.MeshStandardMaterial({
-                color: 0xffffff,
-                roughness: 0.9,
-                flatShading: true,
-                transparent: true,
-                opacity: 0.6
-            });
-
-            const g1 = new THREE.IcosahedronGeometry(0.5, 0);
-            const m1 = new THREE.Mesh(g1, cloudMat);
-            m1.position.x = -0.4;
-            cloud.add(m1);
-
-            const g2 = new THREE.IcosahedronGeometry(0.6, 0);
-            const m2 = new THREE.Mesh(g2, cloudMat);
-            cloud.add(m2);
-
-            const g3 = new THREE.IcosahedronGeometry(0.5, 0);
-            const m3 = new THREE.Mesh(g3, cloudMat);
-            m3.position.x = 0.4;
-            cloud.add(m3);
-
-            cloud.position.set(x, y, z);
-            cloud.scale.setScalar(scale);
-            return cloud;
-        };
-
-        const cloud1 = createCloud(-2.5, 2, -3, 0.8);
-        bgGroup.add(cloud1);
-        const cloud2 = createCloud(2.5, 0, -4, 0.6);
-        bgGroup.add(cloud2);
-        const cloud3 = createCloud(-2, -1.5, -3, 0.5);
-        bgGroup.add(cloud3);
-
-        // --- Floating Particles ---
-        const particleCount = 8;
-        const particles: THREE.Mesh[] = [];
-        const particleGeo = new THREE.OctahedronGeometry(0.1, 0);
-        const particleMat = new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.6 });
-
-        for (let i = 0; i < particleCount; i++) {
-            const p = new THREE.Mesh(particleGeo, particleMat);
-            p.position.set(
-                (Math.random() - 0.5) * 5,
-                (Math.random() - 0.5) * 5,
-                (Math.random() - 0.5) * 2 - 1
-            );
-            p.scale.setScalar(Math.random() * 0.5 + 0.5);
-            bgGroup.add(p);
-            particles.push(p);
-        }
-
-        const camera = new THREE.PerspectiveCamera(50, 300 / 400, 0.1, 1000);
-        camera.position.z = 5;
-        camera.position.y = 0.5;
-
-        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-        renderer.setSize(300, 400);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        mount.appendChild(renderer.domElement);
-
-        // 2. Lights
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.1);
-        scene.add(ambientLight);
-
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
-        dirLight.position.set(5, 5, 5);
-        scene.add(dirLight);
-
-        const frontLight = new THREE.DirectionalLight(0xffeadd, 0.6);
-        frontLight.position.set(0, 2, 5);
-        scene.add(frontLight);
-
-        const backLight = new THREE.DirectionalLight(0xffeeb1, 0.5);
-        backLight.position.set(-5, 5, -5);
-        scene.add(backLight);
-
-        // 3. Character Group
-        const characterGroup = new THREE.Group();
-        scene.add(characterGroup);
-
-        // --- Materials ---
-        const skinMaterial = new THREE.MeshPhysicalMaterial({
-            color: 0xffe5d8, // Warm Fair Skin Tone
-            emissive: 0x5a3a30,
-            emissiveIntensity: 0.05,
-            roughness: 0.45,
-            metalness: 0.0,
-            clearcoat: 0.1,
-            reflectivity: 0.5
-        });
-
-        const blackMaterial = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.2 });
-        const eyebrowMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.9 });
-        const blushMaterial = new THREE.MeshStandardMaterial({ color: 0xff8a8a, roughness: 1, transparent: true, opacity: 0.4 });
-        const noseMaterial = new THREE.MeshPhysicalMaterial({ color: 0xffd1c2, roughness: 0.5, metalness: 0 });
-        const mouthMaterial = new THREE.MeshStandardMaterial({ color: 0xf43f5e, roughness: 0.5 });
-
-        // New Accessories Materials
-        const scarfMaterial = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.8 }); // Amber Scarf
-        const hairMaterial = new THREE.MeshStandardMaterial({ color: 0x2d241e, roughness: 1.0 }); // Dark Brown Hair (Back to fluffiness)
-
-        // --- Body Parts ---
-
-        // Head
-        const headGeo = new THREE.SphereGeometry(1.2, 32, 32);
-        const head = new THREE.Mesh(headGeo, skinMaterial);
-        characterGroup.add(head);
-
-        // Body
-        const bodyGeo = new THREE.SphereGeometry(0.8, 32, 32);
-        const body = new THREE.Mesh(bodyGeo, skinMaterial);
-        body.position.y = -1.5;
-        characterGroup.add(body);
-
-        // --- Accessories ---
-
-        // 1. Scarf (Fills gap between head and body)
-        const scarfGeo = new THREE.TorusGeometry(0.85, 0.25, 16, 32);
-        const scarf = new THREE.Mesh(scarfGeo, scarfMaterial);
-        scarf.rotation.x = Math.PI / 2;
-        scarf.position.y = -1.1;
-        characterGroup.add(scarf);
-
-        // 2. Fluffy Hair (Back to Original Puffy Style)
-        const hairGroup = new THREE.Group();
-        head.add(hairGroup); // Move with head
-
-        const hairPuffGeo = new THREE.SphereGeometry(0.45, 16, 16);
-
-        // Helper to add hair puffs
-        const createPuff = (x: number, y: number, z: number, s: number) => {
-            const m = new THREE.Mesh(hairPuffGeo, hairMaterial);
-            m.position.set(x, y, z);
-            m.scale.setScalar(s);
-            hairGroup.add(m);
-        };
-
-        // Top Main Cloud
-        createPuff(0, 1.35, 0, 1.9);
-
-        // Side Clouds (Upper)
-        createPuff(-0.8, 1.1, 0.3, 1.4);
-        createPuff(0.8, 1.1, 0.3, 1.4);
-
-        // Side Clouds (Lower - kept away from face to not block eyes)
-        createPuff(-1.1, 0.7, -0.2, 1.3);
-        createPuff(1.1, 0.7, -0.2, 1.3);
-
-        // Back Volume
-        createPuff(0, 0.6, -0.9, 2.0);
-        createPuff(-0.7, 1.0, -0.6, 1.5);
-        createPuff(0.7, 1.0, -0.6, 1.5);
-
-        // Front subtle volume (bangs) - kept high
-        createPuff(0, 1.35, 0.5, 1.1);
-
-        // --- Face Features ---
-
-        // Eyes
-        const eyeGeo = new THREE.SphereGeometry(0.12, 16, 16);
-        const leftEye = new THREE.Mesh(eyeGeo, blackMaterial);
-        leftEye.position.set(-0.4, 0.15, 1.08);
-        leftEye.scale.set(1, 1.4, 1);
-        head.add(leftEye);
-
-        const rightEye = new THREE.Mesh(eyeGeo, blackMaterial);
-        rightEye.position.set(0.4, 0.15, 1.08);
-        rightEye.scale.set(1, 1.4, 1);
-        head.add(rightEye);
-
-        // Eyebrows
-        const browGeo = new THREE.CapsuleGeometry(0.03, 0.25, 4, 8);
-        const leftBrow = new THREE.Mesh(browGeo, eyebrowMaterial);
-        leftBrow.position.set(-0.4, 0.45, 1.12);
-        leftBrow.rotation.set(0, 0, 1.7);
-        head.add(leftBrow);
-
-        const rightBrow = new THREE.Mesh(browGeo, eyebrowMaterial);
-        rightBrow.position.set(0.4, 0.45, 1.12);
-        rightBrow.rotation.set(0, 0, -1.7);
-        head.add(rightBrow);
-
-        // Nose
-        const noseGeo = new THREE.SphereGeometry(0.1, 16, 16);
-        const nose = new THREE.Mesh(noseGeo, noseMaterial);
-        nose.position.set(0, 0.0, 1.18);
-        head.add(nose);
-
-        // Mouth
-        const mouthGeo = new THREE.TorusGeometry(0.06, 0.03, 8, 16, Math.PI * 2);
-        const mouth = new THREE.Mesh(mouthGeo, mouthMaterial);
-        mouth.position.set(0, -0.25, 1.14);
-        // Initial neutral state
-        mouth.scale.set(1, 0.5, 1);
-        head.add(mouth);
-
-        // Blush
-        const blushGeo = new THREE.CircleGeometry(0.2, 32);
-        const leftBlush = new THREE.Mesh(blushGeo, blushMaterial);
-        leftBlush.position.set(-0.7, -0.1, 1.0);
-        leftBlush.rotation.y = -0.5;
-        head.add(leftBlush);
-
-        const rightBlush = new THREE.Mesh(blushGeo, blushMaterial);
-        rightBlush.position.set(0.7, -0.1, 1.0);
-        rightBlush.rotation.y = 0.5;
-        head.add(rightBlush);
-
-        // Ears
-        const earGeo = new THREE.SphereGeometry(0.25, 32, 32);
-        const leftEar = new THREE.Mesh(earGeo, skinMaterial);
-        leftEar.position.set(-1.18, 0.1, 0);
-        leftEar.scale.z = 0.5;
-        head.add(leftEar);
-
-        const rightEar = new THREE.Mesh(earGeo, skinMaterial);
-        rightEar.position.set(1.18, 0.1, 0);
-        rightEar.scale.z = 0.5;
-        head.add(rightEar);
-
-
-        // 4. Animation Loop
-        let frameId: number;
-        const clock = new THREE.Clock();
-
-        const animate = () => {
-            frameId = requestAnimationFrame(animate);
-            const t = clock.getElapsedTime();
-
-            // Background Animation
-            cloud1.position.y = 2 + Math.sin(t * 0.3) * 0.2;
-            cloud1.rotation.y = Math.sin(t * 0.1) * 0.1;
-
-            cloud2.position.y = 0 + Math.sin(t * 0.4 + 2) * 0.2;
-            cloud2.rotation.z = Math.sin(t * 0.05) * 0.05;
-
-            cloud3.position.y = -1.5 + Math.sin(t * 0.2 + 4) * 0.1;
-
-            // Particles Animation
-            particles.forEach((p, i) => {
-                p.position.y += Math.sin(t + i) * 0.005;
-                p.rotation.x += 0.01;
-                p.rotation.y += 0.01;
-            });
-
-            // Character Animation
-            characterGroup.position.y = Math.sin(t * 1.5) * 0.05;
-            body.scale.x = 1 + Math.sin(t * 1.5) * 0.01;
-
-            characterGroup.rotation.y = Math.sin(t * 0.5) * 0.08;
-            characterGroup.rotation.x = Math.sin(t * 0.3) * 0.03;
-
-            // Scarf subtle movement
-            scarf.rotation.z = Math.sin(t * 1.5) * 0.05;
-
-            // Hair bounce effect
-            hairGroup.scale.y = 1 + Math.sin(t * 3) * 0.02;
-
-            const { isTalking: talking, isListening: listening, isThinking: thinking } = stateRef.current;
-            if (talking) {
-                const talkFreq = 18;
-                const mouthOpenAmount = (Math.sin(t * talkFreq) + Math.sin(t * talkFreq * 0.8)) * 0.5;
-                head.position.y = Math.sin(t * 12) * 0.02;
-                const mouthScaleY = 0.5 + Math.max(0, mouthOpenAmount + 0.3) * 0.8;
-                const mouthScaleX = 1.0 - Math.max(0, mouthOpenAmount) * 0.15;
-                mouth.scale.set(mouthScaleX, mouthScaleY, 1);
-            } else {
-                head.position.y = THREE.MathUtils.lerp(head.position.y, 0, 0.1);
-                mouth.scale.set(1, 0.5, 1);
-            }
-
-            if (listening || thinking) {
-                characterGroup.rotation.z = THREE.MathUtils.lerp(characterGroup.rotation.z, 0.1, 0.1);
-                characterGroup.rotation.x = THREE.MathUtils.lerp(characterGroup.rotation.x, 0.15, 0.1);
-            } else {
-                characterGroup.rotation.z = THREE.MathUtils.lerp(characterGroup.rotation.z, 0, 0.1);
-                characterGroup.rotation.x = THREE.MathUtils.lerp(characterGroup.rotation.x, 0, 0.1);
-            }
-
-            if (Math.random() > 0.995) {
-                leftEye.scale.y = 0.1;
-                rightEye.scale.y = 0.1;
-            } else {
-                leftEye.scale.y += (1.4 - leftEye.scale.y) * 0.2;
-                rightEye.scale.y += (1.4 - rightEye.scale.y) * 0.2;
-            }
-
-            renderer.render(scene, camera);
-        };
-
-        animate();
-
-        // Cleanup
-        return () => {
-            cancelAnimationFrame(frameId);
-            try {
-                if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
-            } catch (_) { /* already removed */ }
-            // Dispose geometries
-            headGeo.dispose();
-            bodyGeo.dispose();
-            scarfGeo.dispose();
-            hairPuffGeo.dispose();
-            eyeGeo.dispose();
-            browGeo.dispose();
-            noseGeo.dispose();
-            mouthGeo.dispose();
-            blushGeo.dispose();
-            earGeo.dispose();
-            particleGeo.dispose();
-            // Dispose materials
-            skinMaterial.dispose();
-            blackMaterial.dispose();
-            eyebrowMaterial.dispose();
-            blushMaterial.dispose();
-            noseMaterial.dispose();
-            mouthMaterial.dispose();
-            scarfMaterial.dispose();
-            hairMaterial.dispose();
-            particleMat.dispose();
-            // Traverse scene to dispose all materials and geometries
-            scene.traverse((object) => {
-                if (object instanceof THREE.Mesh) {
-                    if (object.geometry) object.geometry.dispose();
-                    if (object.material) {
-                        if (Array.isArray(object.material)) {
-                            object.material.forEach((mat) => mat.dispose());
-                        } else {
-                            object.material.dispose();
-                        }
-                    }
-                }
-            });
-            renderer.dispose();
-        };
-    }, []); // 仅挂载时创建，避免重复 canvas；状态通过 stateRef 更新
-
-    return <div ref={mountRef} className="w-[300px] h-[400px] cursor-pointer active:scale-95 transition-transform" />;
+// --- Video Avatar Component ---
+const VideoAvatar = ({ isTalking, isListening }: { isTalking: boolean, isListening: boolean }) => {
+    return (
+        <div className={`relative w-[260px] h-[260px] rounded-[3rem] overflow-hidden shadow-2xl transition-all duration-500 flex items-center justify-center bg-slate-100
+            ${isTalking ? "scale-105" : "scale-100"}
+        `}>
+            {/* Interaction Glow */}
+            {isTalking && <div className="absolute inset-0 bg-indigo-400 rounded-[3rem] blur-2xl opacity-40 animate-pulse pointer-events-none z-20"></div>}
+            {isListening && <div className="absolute inset-0 bg-emerald-400 rounded-[3rem] blur-2xl opacity-40 animate-pulse pointer-events-none z-20"></div>}
+            
+            {/* Video Player */}
+            <video 
+                src="/avatar.mp4" 
+                autoPlay 
+                loop 
+                muted 
+                playsInline
+                className="w-full h-full object-cover relative z-10"
+                onError={(e) => {
+                    e.currentTarget.parentElement.innerHTML = `<div class="w-full h-full flex flex-col items-center justify-center text-slate-400 p-4 text-center bg-slate-50"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="m9 8 6 4-6 4Z"/></svg><p class="text-sm font-medium">请将视频重命名为<br/>avatar.mp4<br/>并上传到 public 文件夹</p></div>`;
+                }}
+            />
+        </div>
+    );
 };
 
 // --- Sub-Components (Full Screen Scenarios) ---
@@ -495,7 +157,7 @@ const ARNavigationFlow = ({ step, routeData, destination = '天安门广场' }: 
                     <div className="flex items-center gap-4">
                         <div className="flex-1">
                             <h2 className="text-3xl font-black mb-1">{current.text}</h2>
-                            <p className="text-slate-500 font-bold text-lg flex items-center gap-2">
+                            <p className="text-slate-500 font-bold flex items-center gap-2">
                                 {step === 0 ? <Loader2 size={16} className="animate-spin" /> : <Volume2 size={18} className="text-indigo-600" />}
                                 {current.sub}
                             </p>
@@ -1985,7 +1647,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                     />
                 )}
 
-                {/* --- HOME SCREEN (3D Avatar) --- */}
+                {/* --- HOME SCREEN (2D Avatar) --- */}
                 <div className={`w-full h-full flex flex-col relative transition-all duration-700 overflow-hidden bg-gradient-to-b from-indigo-50 to-white ${activeScenario !== 'none' ? 'opacity-0 pointer-events-none scale-95' : 'opacity-100 scale-100'}`}>
 
                     {/* Header */}
@@ -2000,14 +1662,13 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                         </div>
                     </div>
 
-                    {/* 单个动态 3D 数字人居中（仅此一处渲染，无静态重复） */}
+                    {/* 单个动态 2D 数字人居中（仅此一处渲染，无静态重复） */}
                     <div className="flex-1 flex items-center justify-center relative min-h-0 -mt-8 overflow-hidden">
                         <div className="relative flex items-center justify-center group cursor-pointer" onClick={() => setShowAvatarCreator(true)}>
                             <div className="transform scale-90 shrink-0">
-                                <CuteAvatar3D
+                                <VideoAvatar
                                     isTalking={isTalking}
                                     isListening={isListening}
-                                    isThinking={isThinking}
                                 />
                             </div>
                             {/* Platform Shadow */}
