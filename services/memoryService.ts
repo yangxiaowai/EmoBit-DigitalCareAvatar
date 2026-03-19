@@ -3,6 +3,8 @@
  * 管理地标-回忆关联，实现地标触发式记忆唤醒
  */
 
+import { openclawSyncService } from './openclawSyncService';
+
 export interface MemoryAnchor {
     id: string;
     name: string;                    // 地点名称
@@ -39,6 +41,7 @@ export class MemoryService {
     constructor() {
         // 加载预设的记忆锚点（演示用）
         this.loadDefaultAnchors();
+        openclawSyncService.syncMemoryAnchors(this.anchors);
     }
 
     /**
@@ -53,6 +56,7 @@ export class MemoryService {
 
         this.anchors.push(newAnchor);
         this.saveAnchors();
+        openclawSyncService.syncMemoryAnchors(this.anchors);
 
         return newAnchor;
     }
@@ -65,6 +69,7 @@ export class MemoryService {
         if (index !== -1) {
             this.anchors.splice(index, 1);
             this.saveAnchors();
+            openclawSyncService.syncMemoryAnchors(this.anchors);
             return true;
         }
         return false;
@@ -188,6 +193,7 @@ export class MemoryService {
         };
 
         this.listeners.forEach(listener => listener(event));
+        openclawSyncService.syncMemoryEvent(event);
     }
 
     /**
@@ -256,6 +262,7 @@ export class MemoryService {
         } catch (e) {
             console.warn('[Memory] Failed to save anchors:', e);
         }
+        openclawSyncService.syncMemoryAnchors(this.anchors);
     }
 
     /**

@@ -3,6 +3,8 @@
  * 通过分析GPS轨迹检测老人是否迷路或游荡
  */
 
+import { openclawSyncService } from './openclawSyncService';
+
 // 位置点
 export interface GeoPoint {
     latitude: number;
@@ -39,7 +41,7 @@ export interface WanderingEvent {
 
 type WanderingCallback = (event: WanderingEvent) => void;
 
-class WanderingService {
+export class WanderingService {
     private trackingHistory: GeoPoint[] = [];
     private maxHistoryLength = 100;  // 保留最近100个点
     private safeZones: SafeZone[] = [];
@@ -65,6 +67,8 @@ class WanderingService {
             outsideSafeZone: false,
         };
         this.loadSafeZones();
+        openclawSyncService.syncWanderingConfig(this.homeLocation, this.safeZones);
+        openclawSyncService.syncWanderingState(this.currentState);
     }
 
     /**
@@ -82,6 +86,7 @@ class WanderingService {
      */
     private notify(event: WanderingEvent): void {
         this.subscribers.forEach(cb => cb(event));
+        openclawSyncService.syncWanderingEvent(event);
     }
 
     /**
@@ -90,6 +95,7 @@ class WanderingService {
     setHomeLocation(location: GeoPoint): void {
         this.homeLocation = location;
         localStorage.setItem('emobit_home_location', JSON.stringify(location));
+        openclawSyncService.syncWanderingConfig(this.homeLocation, this.safeZones);
     }
 
     /**
@@ -98,6 +104,7 @@ class WanderingService {
     addSafeZone(zone: SafeZone): void {
         this.safeZones.push(zone);
         localStorage.setItem('emobit_safe_zones', JSON.stringify(this.safeZones));
+        openclawSyncService.syncWanderingConfig(this.homeLocation, this.safeZones);
     }
 
     /**
@@ -125,6 +132,7 @@ class WanderingService {
         } catch (e) {
             console.warn('[Wandering] Failed to load safe zones:', e);
         }
+        openclawSyncService.syncWanderingConfig(this.homeLocation, this.safeZones);
     }
 
     /**
@@ -195,6 +203,7 @@ class WanderingService {
 
         // 检查是否在安全区域
         this.checkSafeZone(point);
+        openclawSyncService.syncWanderingState(this.currentState);
     }
 
     /**
@@ -358,6 +367,14 @@ class WanderingService {
      */
     getState(): WanderingState {
         return { ...this.currentState };
+    }
+
+    getSafeZones(): SafeZone[] {
+        return [...this.safeZones];
+    }
+
+    getHomeLocation(): GeoPoint | null {
+        return this.homeLocation ? { ...this.homeLocation } : null;
     }
 
     /**

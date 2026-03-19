@@ -3,6 +3,8 @@
  * 管理老人的健康数据并映射到头像状态
  */
 
+import { openclawSyncService } from './openclawSyncService';
+
 export interface HealthMetrics {
     heartRate: number;        // 心率 (bpm)
     bloodOxygen: number;      // 血氧 (%)
@@ -114,6 +116,7 @@ export class HealthStateService {
         // 通知监听器
         const state = this.calculateAvatarState();
         this.listeners.forEach(listener => listener(state));
+        openclawSyncService.syncHealthMetrics(this.currentMetrics, this.alertHistory);
     }
 
     /**
@@ -735,6 +738,12 @@ export class HealthStateService {
      */
     getAlertHistory(): HealthAlert[] {
         return [...this.alertHistory];
+    }
+
+    getCurrentMetrics(): HealthMetrics {
+        return {
+            ...(this.currentMetrics || this.getDefaultMetrics()),
+        };
     }
 
     /**

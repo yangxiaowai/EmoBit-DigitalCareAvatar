@@ -3,6 +3,8 @@
  * 通过分析对话和行为评估老人的认知健康状态
  */
 
+import { openclawSyncService } from './openclawSyncService';
+
 // 对话记录
 export interface ConversationLog {
     id: string;
@@ -11,6 +13,17 @@ export interface ConversationLog {
     timestamp: Date;
     sentiment: 'positive' | 'neutral' | 'negative';  // 情绪
     topics: string[];           // 话题标签
+}
+
+export interface CognitiveAssessmentItem {
+    id: string;
+    category: 'time_orientation' | 'location_orientation' | 'person_recognition' | 'memory_repetition' | 'emotion';
+    prompt: string;
+    response: string;
+    score: number;
+    maxScore: number;
+    notes?: string;
+    timestamp: Date;
 }
 
 // 认知评分
@@ -46,6 +59,7 @@ export interface CognitiveTrend {
 
 class CognitiveService {
     private conversations: ConversationLog[] = [];
+    private assessments: CognitiveAssessmentItem[] = [];
     private dailyReports: DailyReport[] = [];
     private maxConversations = 500;  // 保留最近500条对话
 
@@ -57,7 +71,9 @@ class CognitiveService {
 
     constructor() {
         this.loadConversations();
+        this.loadAssessments();
         this.loadReports();
+        openclawSyncService.syncCognitiveHistory(this.conversations, this.assessments);
     }
 
     /**
@@ -117,6 +133,19 @@ class CognitiveService {
         }
     }
 
+    private loadAssessments(): void {
+        try {
+            const saved = localStorage.getItem('emobit_cognitive_assessments');
+            if (saved) {
+                this.assessments = JSON.parse(saved);
+            } else {
+                this.assessments = [];
+            }
+        } catch (e) {
+            console.warn('[Cognitive] 加载评估项失败:', e);
+        }
+    }
+
     /**
      * 保存对话记录
      */
@@ -126,6 +155,7 @@ class CognitiveService {
             this.conversations = this.conversations.slice(-this.maxConversations);
         }
         localStorage.setItem('emobit_conversations', JSON.stringify(this.conversations));
+        openclawSyncService.syncCognitiveHistory(this.conversations, this.assessments);
     }
 
     /**
@@ -137,6 +167,14 @@ class CognitiveService {
             this.dailyReports = this.dailyReports.slice(-30);
         }
         localStorage.setItem('emobit_cognitive_reports', JSON.stringify(this.dailyReports));
+    }
+
+    private saveAssessments(): void {
+        if (this.assessments.length > this.maxConversations) {
+            this.assessments = this.assessments.slice(-this.maxConversations);
+        }
+        localStorage.setItem('emobit_cognitive_assessments', JSON.stringify(this.assessments));
+        openclawSyncService.syncCognitiveHistory(this.conversations, this.assessments);
     }
 
     /**
@@ -157,8 +195,93 @@ class CognitiveService {
 
         this.conversations.push(log);
         this.saveConversations();
+        openclawSyncService.syncConversation(log);
+        this.recordAssessments(userMessage, aiResponse);
 
         console.log('[Cognitive] 记录对话:', { sentiment, topics });
+    }
+
+    private recordAssessments(userMessage: string, aiResponse: string): void {
+        const items = this.deriveAssessmentItems(userMessage, aiResponse);
+        if (items.length === 0) return;
+        this.assessments.push(...items);
+        this.saveAssessments();
+        items.forEach((item) => openclawSyncService.syncCognitiveAssessment(item));
+    }
+
+    private deriveAssessmentItems(userMessage: string, aiResponse: string): CognitiveAssessmentItem[] {
+        const items: CognitiveAssessmentItem[] = [];
+        const normalized = userMessage.replace(/\s+/g, '');
+        const duplicateCount = this.conversations
+            .filter((entry) => this.calculateSimilarity(entry.userMessage, userMessage) > 0.75)
+            .length;
+
+        if (this.TIME_KEYWORDS.some((keyword) => normalized.includes(keyword))) {
+            items.push({
+                id: `cog_${Date.now()}_time`,
+                category: 'time_orientation',
+                prompt: '时间定向',
+                response: userMessage,
+                score: duplicateCount > 1 ? 0 : 1,
+                maxScore: 1,
+                notes: duplicateCount > 1 ? '重复询问时间，建议持续观察时间定向能力。' : aiResponse,
+                timestamp: new Date(),
+            });
+        }
+
+        if (this.LOCATION_KEYWORDS.some((keyword) => normalized.includes(keyword))) {
+            items.push({
+                id: `cog_${Date.now()}_location`,
+                category: 'location_orientation',
+                prompt: '地点定向',
+                response: userMessage,
+                score: duplicateCount > 0 ? 0 : 1,
+                maxScore: 1,
+                notes: duplicateCount > 0 ? '出现地点/路线困惑信号。' : aiResponse,
+                timestamp: new Date(),
+            });
+        }
+
+        if (/他是谁|这是谁|认不出来|不认识/.test(normalized)) {
+            items.push({
+                id: `cog_${Date.now()}_person`,
+                category: 'person_recognition',
+                prompt: '人物识别',
+                response: userMessage,
+                score: 0,
+                maxScore: 1,
+                notes: '建议结合人脸识别场景继续观察熟人识别能力。',
+                timestamp: new Date(),
+            });
+        }
+
+        if (duplicateCount > 1) {
+            items.push({
+                id: `cog_${Date.now()}_repeat`,
+                category: 'memory_repetition',
+                prompt: '重复提问',
+                response: userMessage,
+                score: Math.max(0, 2 - duplicateCount),
+                maxScore: 2,
+                notes: `近阶段相似问题出现 ${duplicateCount} 次。`,
+                timestamp: new Date(),
+            });
+        }
+
+        if (this.NEGATIVE_KEYWORDS.some((keyword) => normalized.includes(keyword))) {
+            items.push({
+                id: `cog_${Date.now()}_emotion`,
+                category: 'emotion',
+                prompt: '情绪状态',
+                response: userMessage,
+                score: 0,
+                maxScore: 1,
+                notes: '检测到焦虑/不适情绪，可结合黄昏守护和家属安抚。',
+                timestamp: new Date(),
+            });
+        }
+
+        return items;
     }
 
     /**
@@ -380,6 +503,10 @@ class CognitiveService {
      */
     getConversations(): ConversationLog[] {
         return [...this.conversations];
+    }
+
+    getAssessments(limit: number = 40): CognitiveAssessmentItem[] {
+        return this.assessments.slice(-limit);
     }
 
     /**

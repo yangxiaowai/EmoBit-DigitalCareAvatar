@@ -1,16 +1,23 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import ElderlyApp from './components/ElderlyApp';
 import { SimulationType, LogEntry, SystemStatus } from './types';
 import { Terminal, Activity, Bell, Smartphone, LayoutDashboard } from 'lucide-react';
 import { sundowningService } from './services/sundowningService';
+import { wanderingService } from './services/wanderingService';
+import { medicationService } from './services/medicationService';
+import { openclawSyncService } from './services/openclawSyncService';
+import { isGuardianOnlyBridgeMessage } from './utils/openclawMessageGuards';
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<'dashboard' | 'app'>('dashboard');
   const [simulation, setSimulation] = useState<SimulationType>(SimulationType.NONE);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [systemStatus, setSystemStatus] = useState<SystemStatus>(SystemStatus.NORMAL);
+  const [elderMessage, setElderMessage] = useState<{ id: string; text: string; purpose?: string; timestamp?: number } | null>(null);
+  const [elderAction, setElderAction] = useState<{ id: string; action: string; payload?: Record<string, unknown>; timestamp?: number } | null>(null);
+  const lastUiCommandTsRef = useRef<number>(0);
 
   // Helper to add logs
   const addLog = useCallback((module: string, message: string, level: LogEntry['level'] = 'info') => {
@@ -32,24 +39,38 @@ const App: React.FC = () => {
       case SimulationType.WANDERING:
         setSystemStatus(SystemStatus.WARNING);
         addLog('DBSCAN', '检测到地理位置聚类异常。用户偏离安全区 > 500m。', 'warn');
+        // 触发游走事件 → 同步到 Bridge → webhook 唤醒 OpenClaw 分析
+        wanderingService.simulateWandering('lost');
         break;
       case SimulationType.FALL:
         setSystemStatus(SystemStatus.CRITICAL);
         addLog('ACCELEROMETER', '检测到Y轴急剧减速 (3.2g)。身体姿态异常。', 'error');
         addLog('SYSTEM', '启动一级紧急响应协议。', 'error');
+        // 项目里没有独立的“跌倒服务”，这里直接发送一个模拟事件给 Bridge
+        openclawSyncService.emitScenarioSignal('simulation.fall', {
+          gForce: 3.2,
+          posture: 'abnormal',
+          source: 'simulation',
+          timestamp: new Date().toISOString(),
+        }, 'critical');
         break;
       case SimulationType.MEDICATION:
         setSystemStatus(SystemStatus.NORMAL);
         addLog('CV_CAMERA', '检测到药盒交互。置信度: 98%。', 'success');
         addLog('WATCH', '识别到“吞咽”手势。', 'success');
+        // 触发一次用药提醒事件 → 同步到 Bridge → 供 OpenClaw cron/agent 升级通知
+        medicationService.simulateReminder();
         break;
       case SimulationType.SUNDOWNING:
         setSystemStatus(SystemStatus.WARNING);
         addLog('SUNDOWNING', '进入黄昏高风险时段，已启动主动干预策略。', 'warn');
+        // 启动黄昏风险模拟 → 会产生 alert/intervention 并同步到 Bridge
+        sundowningService.startSimulation();
         break;
       default:
         setSystemStatus(SystemStatus.NORMAL);
         addLog('SYSTEM', '系统重置。监控已激活。', 'info');
+        sundowningService.stopSimulation();
     }
   };
 
@@ -91,6 +112,122 @@ const App: React.FC = () => {
       unsubscribeAlert();
     };
   }, [addLog, simulation]);
+
+  // OpenClaw → UI：轮询 Bridge 的 uiCommands，把 OpenClaw 的决策/动作结果回写到界面
+  useEffect(() => {
+    const enabled = openclawSyncService.isEnabled();
+    const baseUrl = (import.meta.env.VITE_OPENCLAW_BRIDGE_URL || '').replace(/\/$/, '');
+    const elderId = openclawSyncService.getElderId();
+    if (!enabled || !baseUrl) return;
+    const initialSince = Date.now();
+    lastUiCommandTsRef.current = Math.max(lastUiCommandTsRef.current, initialSince);
+
+    const token = import.meta.env.VITE_OPENCLAW_BRIDGE_TOKEN as string | undefined;
+
+    const applyCommand = (cmd: any) => {
+      switch (cmd.type) {
+        case 'status.set': {
+          const v = String(cmd.payload?.status || '').toLowerCase();
+          if (v === 'critical') setSystemStatus(SystemStatus.CRITICAL);
+          else if (v === 'warning') setSystemStatus((prev) => (prev === SystemStatus.CRITICAL ? prev : SystemStatus.WARNING));
+          else if (v === 'normal') setSystemStatus(SystemStatus.NORMAL);
+          return;
+        }
+        case 'log.add': {
+          addLog(
+            cmd.payload?.module || 'OPENCLAW',
+            cmd.payload?.message || '收到 OpenClaw 指令',
+            cmd.payload?.level || 'info'
+          );
+          return;
+        }
+        case 'view.set': {
+          const view = cmd.payload?.view;
+          if (view === 'dashboard' || view === 'app') setActiveView(view);
+          return;
+        }
+        case 'outbound.recorded': {
+          const purpose = cmd.payload?.purpose || 'general';
+          const channel = cmd.payload?.channel || 'message';
+          const audience = String(cmd.payload?.audience || '');
+          const message = String(cmd.payload?.message || '').trim();
+          if (
+            audience === 'elder' &&
+            channel === 'frontend' &&
+            isGuardianOnlyBridgeMessage({ text: message, purpose })
+          ) {
+            addLog('OPENCLAW', `已忽略误投到老人前端的家属通知记录（${purpose}）`, 'warn');
+            return;
+          }
+          const targets = Array.isArray(cmd.payload?.targets) ? cmd.payload.targets.join(',') : '';
+          addLog('OPENCLAW', `已执行通知动作（${purpose}/${channel}）${targets ? ` → ${targets}` : ''}`, 'success');
+          return;
+        }
+        case 'elder.message': {
+          const text = String(cmd.payload?.message || '').trim();
+          if (!text) return;
+          const purpose = String(cmd.payload?.purpose || 'general');
+          const timestamp = typeof cmd.timestamp === 'number' ? cmd.timestamp : Date.now();
+          if (isGuardianOnlyBridgeMessage({ text, purpose })) {
+            addLog('OPENCLAW', `已拦截家属专属消息，未向老人端播报（${purpose}）`, 'warn');
+            return;
+          }
+          setElderMessage({
+            id: String(cmd.id || `elder_${Date.now()}`),
+            text,
+            purpose,
+            timestamp,
+          });
+          addLog('OPENCLAW', `已将老人沟通文案回写到前端（${purpose}）`, 'info');
+          return;
+        }
+        case 'elder.action': {
+          const action = String(cmd.payload?.action || '').trim();
+          if (!action) return;
+          const timestamp = typeof cmd.timestamp === 'number' ? cmd.timestamp : Date.now();
+          setElderAction({
+            id: String(cmd.id || `elder_action_${Date.now()}`),
+            action,
+            payload: cmd.payload || {},
+            timestamp,
+          });
+          addLog('OPENCLAW', `已下发家属联动动作（${action}）`, 'info');
+          return;
+        }
+        default:
+          return;
+      }
+    };
+
+    const poll = async () => {
+      try {
+        const since = lastUiCommandTsRef.current || 0;
+        const url = new URL('/api/ui/commands', baseUrl);
+        url.searchParams.set('elderId', elderId);
+        url.searchParams.set('since', String(since));
+        const res = await fetch(url.toString(), {
+          headers: {
+            ...(token ? { 'x-emobit-bridge-token': token } : {}),
+          },
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        const commands = Array.isArray(json.commands) ? json.commands : [];
+        for (const cmd of commands.reverse()) {
+          if (typeof cmd.timestamp === 'number') {
+            lastUiCommandTsRef.current = Math.max(lastUiCommandTsRef.current, cmd.timestamp);
+          }
+          applyCommand(cmd);
+        }
+      } catch {
+        // ignore polling errors in demo mode
+      }
+    };
+
+    poll();
+    const timer = setInterval(poll, 2000);
+    return () => clearInterval(timer);
+  }, [addLog]);
 
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans text-slate-900">
@@ -154,7 +291,7 @@ const App: React.FC = () => {
               <Dashboard status={systemStatus} simulation={simulation} logs={logs} />
             ) : (
               <div className="h-full w-full overflow-y-auto p-6">
-                 <ElderlyApp status={systemStatus} simulation={simulation} />
+                 <ElderlyApp status={systemStatus} simulation={simulation} externalMessage={elderMessage} externalAction={elderAction} />
               </div>
             )}
           </div>

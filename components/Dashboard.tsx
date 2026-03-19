@@ -3,13 +3,17 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SimulationType, SystemStatus, LogEntry, DashboardTab } from '../types';
 import AvatarStatus3D from './AvatarStatus3D';
 import { VoiceService, AvatarService } from '../services/api';
-import { aiService, type CognitiveBrief } from '../services/aiService';
+import { aiService, type CognitiveBrief, type ElderlyProfile } from '../services/aiService';
 import { voiceSelectionService } from '../services/voiceSelectionService';
 import { blobToWav, getAudioDurationSeconds } from '../utils/audioUtils';
 import { healthStateService, HealthMetrics, HEALTHY_VITALS, SUBHEALTHY_VITALS, AvatarState } from '../services/healthStateService';
 import { mapService } from '../services/mapService';
 import { medicationService, Medication } from '../services/medicationService';
 import { faceService, FaceData } from '../services/faceService';
+import { cognitiveService, CognitiveAssessmentItem } from '../services/cognitiveService';
+import { carePlanService, CarePlanItem, CareTrendSummary } from '../services/carePlanService';
+import { locationAutomationService, LocationAutomationEvent, LocationAutomationState } from '../services/locationAutomationService';
+import { wanderingService } from '../services/wanderingService';
 import { ALBUM_MEMORIES } from '../config/albumMemories';
 import { FACE_RECOGNITION_CONFIG } from '../config/faceRecognition';
 import {
@@ -18,6 +22,8 @@ import {
     SundowningPushAlert,
     SundowningRiskSnapshot,
 } from '../services/sundowningService';
+import { openclawSyncService } from '../services/openclawSyncService';
+import { openclawActionService } from '../services/openclawActionService';
 import { ShieldCheck, MapPin, Heart, Pill, AlertTriangle, Phone, Activity, Clock, User, Calendar, LayoutGrid, FileText, Settings, ChevronRight, Eye, Brain, Layers, Play, Pause, SkipBack, SkipForward, History, AlertCircle, Signal, Wifi, Battery, Moon, Footprints, Sun, Cloud, ArrowLeft, Mic, Upload, Sparkles, CheckCircle, Volume2, ToggleRight, Loader2, ScanFace, Box, Wand2, Plus, X, Users, Camera, TrendingUp, BookOpen, MessageCircle, MessageSquare, Link2, ArrowUpRight } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, AreaChart, Area, BarChart, Bar, CartesianGrid } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -67,6 +73,42 @@ function parseHealthBriefSections(md: string): { overall: string; pointsToNote: 
         pointsToNote: sections.pointsToNote ?? '',
         familySuggestions: sections.familySuggestions ?? '',
     };
+}
+
+type GuardianNoticeTone = 'success' | 'warn' | 'error';
+
+interface GuardianNoticeCard {
+    title: string;
+    message: string;
+    status: string;
+    tone: GuardianNoticeTone;
+    timestamp: number;
+}
+
+function formatMonthDayTime(input: number | Date = new Date()): string {
+    const date = input instanceof Date ? input : new Date(input);
+    return date.toLocaleString('zh-CN', {
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    });
+}
+
+function formatClockLabel(input: number | Date = new Date()): string {
+    const date = input instanceof Date ? input : new Date(input);
+    return date.toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    });
+}
+
+function getRiskLevelLabel(level: 'low' | 'medium' | 'high'): string {
+    if (level === 'high') return '高风险';
+    if (level === 'medium') return '中风险';
+    return '低风险';
 }
 
 /** 定位 Tab 内容：独立组件保证引用稳定，避免父组件重渲染时卸载导致地图容器被销毁 */
@@ -777,11 +819,119 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                 ? '黄昏风险上升'
                 : '实时守护中';
 
-    const handleManualIntervention = () => {
+    const pushGuardianNotice = (notice: Omit<GuardianNoticeCard, 'timestamp'>) => {
+        setGuardianNotice({
+            ...notice,
+            timestamp: Date.now(),
+        });
+    };
+
+    const sendGuardianNotification = async ({
+        title,
+        message,
+        purpose,
+        metadata = {},
+    }: {
+        title: string;
+        message: string;
+        purpose: string;
+        metadata?: Record<string, unknown>;
+    }) => {
+        if (!openclawActionService.isConfigured()) {
+            pushGuardianNotice({
+                title,
+                message,
+                tone: 'error',
+                status: 'OpenClaw Bridge 未配置，未能发送到飞书。',
+            });
+            return { ok: false, skipped: false };
+        }
+
+        try {
+            const result = await openclawActionService.notifyGuardians({
+                elderId: openclawSyncService.getElderId(),
+                message,
+                purpose,
+                metadata,
+            });
+
+            if (result?.skipped) {
+                pushGuardianNotice({
+                    title,
+                    message,
+                    tone: 'warn',
+                    status: `已被冷却窗口拦截：${result.reason || '同类提醒短时间内已发送。'}`,
+                });
+                return { ok: true, skipped: true };
+            }
+
+            const targetText = Array.isArray(result?.targets) && result.targets.length > 0
+                ? result.targets.join('、')
+                : '已配置家属目标';
+
+            pushGuardianNotice({
+                title,
+                message,
+                tone: 'success',
+                status: `已发送到飞书：${targetText}`,
+            });
+            return { ok: true, skipped: false };
+        } catch (error) {
+            pushGuardianNotice({
+                title,
+                message,
+                tone: 'error',
+                status: error instanceof Error ? error.message : '发送飞书提醒失败。',
+            });
+            return { ok: false, skipped: false };
+        }
+    };
+
+    const getMedicationSimulationTarget = (): { medication: Medication; scheduledTime: string } | null => {
+        const simulatedTime = formatClockLabel();
+        const activeReminder = medicationService.getActiveReminder();
+        if (activeReminder) {
+            return {
+                medication: activeReminder.medication,
+                scheduledTime: activeReminder.scheduledTime,
+            };
+        }
+
+        const nextMedication = medicationService.getNextMedicationTime();
+        if (nextMedication) {
+            return {
+                medication: nextMedication.medication,
+                scheduledTime: simulatedTime,
+            };
+        }
+
+        const fallbackMedication = medicationService.getMedications()[0];
+        if (!fallbackMedication) return null;
+        return {
+            medication: fallbackMedication,
+            scheduledTime: simulatedTime,
+        };
+    };
+
+    const handleManualIntervention = async () => {
         const plan = sundowningService.triggerIntervention(undefined, 'manual');
         if (!plan) return;
         setInterventionFlash(`已启动：${plan.title}`);
         setTimeout(() => setInterventionFlash(null), 2200);
+        const snapshot = sundowningService.getCurrentSnapshot();
+        const factors = snapshot.keyFactors.slice(0, 2).join('、');
+        await sendGuardianNotification({
+            title: '黄昏守护更新',
+            message: `【黄昏守护提醒】张爷爷于${formatMonthDayTime(snapshot.timestamp)}出现${getRiskLevelLabel(snapshot.riskLevel)}信号，风险指数${snapshot.riskScore}。系统已执行「${plan.title}」干预，当前关注点：${factors || '黄昏相关风险信号上升'}。建议今晚增加陪伴或电话安抚。`,
+            purpose: 'sundowning_update',
+            metadata: {
+                riskScore: snapshot.riskScore,
+                riskLevel: snapshot.riskLevel,
+                interventionTitle: plan.title,
+                dedupeKey: 'sundowning:manual_intervention',
+                dedupeMinutes: 5,
+            },
+        });
     };
 
     // 订阅健康状态变化
@@ -842,6 +992,15 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
     // Simulation State
     const [historyData, setHistoryData] = useState<{ lat: number; lng: number; time: Date; event?: { type: string; title: string; desc?: string } }[]>([]);
     const [trajectoryLoading, setTrajectoryLoading] = useState(false);
+    const [careItems, setCareItems] = useState<CarePlanItem[]>(carePlanService.getUpcomingItems(3));
+    const [careTrend, setCareTrend] = useState<CareTrendSummary>(carePlanService.getTrend());
+    const [recentAssessments, setRecentAssessments] = useState<CognitiveAssessmentItem[]>(cognitiveService.getAssessments(4));
+    const [cognitiveTrendSnapshot, setCognitiveTrendSnapshot] = useState(cognitiveService.getTrend());
+    const [locationAutomationState, setLocationAutomationState] = useState<LocationAutomationState>(locationAutomationService.getState());
+    const [locationAutomationEvents, setLocationAutomationEvents] = useState<LocationAutomationEvent[]>(locationAutomationService.getEvents(4));
+    const [careFlowFlash, setCareFlowFlash] = useState<string | null>(null);
+    const [familyControlFlash, setFamilyControlFlash] = useState<string | null>(null);
+    const [guardianNotice, setGuardianNotice] = useState<GuardianNoticeCard | null>(null);
 
     // 上海市静安区美丽园小区（延安西路379弄）- 真实地址作为安全中心，电子围栏半径 100m
     const HOME_LAT = 31.2192;
@@ -887,6 +1046,9 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
             setHistoryIndex(0);
             setIsPlaying(true);
             setTrajectoryLoading(false);
+            locationAutomationService.simulateArrivalHome();
+            setLocationAutomationState(locationAutomationService.getState());
+            setLocationAutomationEvents(locationAutomationService.getEvents(4));
         });
     };
 
@@ -938,8 +1100,240 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
             setHistoryIndex(0);
             setIsPlaying(true);
             setTrajectoryLoading(false);
+            locationAutomationService.simulateLeaveHome();
+            wanderingService.simulateWandering('lost');
+            const latestLocationState = locationAutomationService.getState();
+            const latestWanderingState = wanderingService.getState();
+            setLocationAutomationState(latestLocationState);
+            setLocationAutomationEvents(locationAutomationService.getEvents(4));
+            setCareFlowFlash('已模拟疑似走失，并向家属发送预警。');
+            void sendGuardianNotification({
+                title: '走失预警',
+                message: `【走失提醒】张爷爷于${formatMonthDayTime()}疑似离开安全范围，当前位置${latestLocationState.currentLabel}，距家约${latestLocationState.lastDistanceMeters}米。系统判定存在${Math.round(latestWanderingState.confidence * 100)}%的走失风险，已开启持续定位关注，请家属尽快联系确认。`,
+                purpose: 'wandering_alert',
+                metadata: {
+                    wanderingType: 'lost',
+                    locationLabel: latestLocationState.currentLabel,
+                    distanceMeters: latestLocationState.lastDistanceMeters,
+                    confidence: latestWanderingState.confidence,
+                    dedupeKey: 'wandering:lost',
+                    dedupeMinutes: 15,
+                },
+            });
         });
     };
+
+    const refreshInsightSnapshots = () => {
+        setCareItems(carePlanService.getUpcomingItems(3));
+        setCareTrend(carePlanService.getTrend());
+        setRecentAssessments(cognitiveService.getAssessments(4));
+        setCognitiveTrendSnapshot(cognitiveService.getTrend());
+        setLocationAutomationState(locationAutomationService.getState());
+        setLocationAutomationEvents(locationAutomationService.getEvents(4));
+    };
+
+    const simulateVoiceCareFlow = (kind: 'medication' | 'hydration' | 'sleep' | 'followup') => {
+        const result = carePlanService.simulateVoicePlan(kind);
+        setCareFlowFlash(`已创建：${result.item.title}（${result.item.time}）`);
+        openclawSyncService.emitScenarioSignal('simulation.voice_care_plan', {
+            kind,
+            item: result.item,
+            reply: result.reply,
+            source: 'dashboard_button',
+        }, 'info');
+        refreshInsightSnapshots();
+    };
+
+    const simulateCognitiveCapture = () => {
+        cognitiveService.recordConversation('今天星期几？我是不是忘记吃药了？', '今天是星期三，您晚饭后的药还没吃，我会提醒您。');
+        cognitiveService.recordConversation('我现在在哪里？', '您现在在家里，客厅很安全。');
+        setCareFlowFlash('已记录一组认知问答与重复提问信号。');
+        openclawSyncService.emitScenarioSignal('simulation.cognitive_capture', {
+            assessments: cognitiveService.getAssessments(3),
+            trend: cognitiveService.getTrend(),
+        }, 'warn');
+        refreshInsightSnapshots();
+    };
+
+    const simulateMedicationNotification = async (mode: 'pending' | 'taken') => {
+        const target = getMedicationSimulationTarget();
+        if (!target) {
+            setCareFlowFlash('暂无可用药物配置，无法模拟服药提醒。');
+            return;
+        }
+
+        if (mode === 'pending') {
+            medicationService.triggerReminder(target.medication, target.scheduledTime);
+            refreshInsightSnapshots();
+            setCareFlowFlash(`已触发未服药提醒：${target.medication.name}（${target.scheduledTime}）`);
+            await sendGuardianNotification({
+                title: '未服药提醒',
+                message: `【未服药提醒】张爷爷计划于${target.scheduledTime}服用${target.medication.name}（${target.medication.dosage}），当前仍未确认服药。系统已在老人端发起语音提醒：${target.medication.instructions}。建议家属稍后电话确认。`,
+                purpose: 'medication_pending_alert',
+                metadata: {
+                    medicationId: target.medication.id,
+                    medicationName: target.medication.name,
+                    scheduledTime: target.scheduledTime,
+                    dedupeKey: `medication:pending:${target.medication.id}:${target.scheduledTime}`,
+                    dedupeMinutes: 30,
+                },
+            });
+            return;
+        }
+
+        let activeReminder = medicationService.getActiveReminder();
+        if (!activeReminder) {
+            medicationService.triggerReminder(target.medication, target.scheduledTime);
+            activeReminder = medicationService.getActiveReminder();
+        }
+        if (!activeReminder) {
+            setCareFlowFlash('服药确认失败，未能生成提醒上下文。');
+            return;
+        }
+
+        medicationService.confirmTaken(activeReminder.medication.id);
+        refreshInsightSnapshots();
+        setCareFlowFlash(`已记录服药完成：${activeReminder.medication.name}`);
+        await sendGuardianNotification({
+            title: '已服药确认',
+            message: `【已服药提醒】张爷爷已于${formatClockLabel()}完成${activeReminder.medication.name}服用，计划时间${activeReminder.scheduledTime}，剂量为${activeReminder.medication.dosage}。系统已记录本次服药完成，请家属放心。`,
+            purpose: 'medication_taken_update',
+            metadata: {
+                medicationId: activeReminder.medication.id,
+                medicationName: activeReminder.medication.name,
+                scheduledTime: activeReminder.scheduledTime,
+                dedupeKey: `medication:taken:${activeReminder.medication.id}:${new Date().toISOString().slice(0, 10)}`,
+                dedupeMinutes: 30,
+            },
+        });
+    };
+
+    const simulateSundowningAlert = async () => {
+        sundowningService.startSimulation();
+        const snapshot = sundowningService.getCurrentSnapshot();
+        const factors = snapshot.keyFactors.slice(0, 3).join('、');
+        await sendGuardianNotification({
+            title: '黄昏守护提醒',
+            message: `【黄昏守护提醒】张爷爷于${formatMonthDayTime(snapshot.timestamp)}出现黄昏风险上升，当前风险指数${snapshot.riskScore}（${getRiskLevelLabel(snapshot.riskLevel)}）。系统检测到${factors || '困惑和重复提问信号升高'}，已启动持续观察${snapshot.riskLevel === 'high' ? '并准备自动干预' : ''}。建议今晚安排家属陪伴或视频通话。`,
+            purpose: 'sundowning_alert',
+            metadata: {
+                riskScore: snapshot.riskScore,
+                riskLevel: snapshot.riskLevel,
+                factors: snapshot.keyFactors,
+                dedupeKey: 'sundowning:alert',
+                dedupeMinutes: 5,
+            },
+        });
+    };
+
+    const simulateVitalSignAlert = async () => {
+        const metrics: HealthMetrics = {
+            heartRate: 124,
+            bloodOxygen: 88,
+            sleepHours: 4.3,
+            steps: 980,
+            bloodPressure: { systolic: 168, diastolic: 102 },
+            temperature: 37.8,
+        };
+        setCurrentMetrics(metrics);
+        setActivePreset('subhealthy');
+        healthStateService.updateMetrics(metrics);
+        const latestAlerts = healthStateService.getAlertHistory().slice(0, 3);
+        const alertSummary = latestAlerts.length > 0
+            ? latestAlerts.map((item) => item.message.replace(/[！!]+$/g, '')).join('、')
+            : '心率、血氧与血压出现明显异常';
+        setCareFlowFlash('已模拟生命体征异常，并向家属发送健康提醒。');
+        await sendGuardianNotification({
+            title: '生命体征提醒',
+            message: `【生命体征提醒】张爷爷于${formatMonthDayTime()}出现生命体征异常：心率${metrics.heartRate}次/分，血氧${metrics.bloodOxygen}%，血压${metrics.bloodPressure?.systolic}/${metrics.bloodPressure?.diastolic}mmHg。系统判断${alertSummary}，建议尽快复测；如持续异常，请联系家属并评估是否就医。`,
+            purpose: 'health_alert',
+            metadata: {
+                heartRate: metrics.heartRate,
+                bloodOxygen: metrics.bloodOxygen,
+                bloodPressure: metrics.bloodPressure,
+                dedupeKey: 'health:vitals',
+                dedupeMinutes: 10,
+            },
+        });
+    };
+
+    const postElderAction = async (action: string, payload: Record<string, unknown>, purpose = 'family_control') => {
+        if (!openclawActionService.isConfigured()) {
+            setFamilyControlFlash(`Bridge 未配置，无法下发动作：${action}`);
+            return;
+        }
+        try {
+            await openclawActionService.queueElderAction({
+                elderId: openclawSyncService.getElderId(),
+                action,
+                purpose,
+                payload,
+            });
+            setFamilyControlFlash(`已下发动作：${action}`);
+        } catch {
+            setFamilyControlFlash(`动作下发失败：${action}`);
+        }
+    };
+
+    const simulateLocationAutomation = async (mode: 'home' | 'leave' | 'unknown') => {
+        if (mode === 'home') {
+            locationAutomationService.simulateArrivalHome();
+            setCareFlowFlash('已模拟到家联动。');
+            const state = locationAutomationService.getState();
+            await sendGuardianNotification({
+                title: '到家提醒',
+                message: `【到家提醒】张爷爷已于${formatMonthDayTime()}安全到家，当前定位显示在${state.currentLabel}，系统将继续保持在家守护。`,
+                purpose: 'location_arrived_home_update',
+                metadata: {
+                    locationLabel: state.currentLabel,
+                    distanceMeters: state.lastDistanceMeters,
+                    dedupeKey: 'location:arrived_home',
+                    dedupeMinutes: 10,
+                },
+            });
+        } else if (mode === 'leave') {
+            locationAutomationService.simulateLeaveHome();
+            setCareFlowFlash('已模拟离家联动。');
+            const state = locationAutomationService.getState();
+            await sendGuardianNotification({
+                title: '离家提醒',
+                message: `【离家提醒】张爷爷于${formatMonthDayTime()}离开家中，当前定位在${state.currentLabel}，距家约${state.lastDistanceMeters}米。系统已开启外出关注。`,
+                purpose: 'location_leave_update',
+                metadata: {
+                    locationLabel: state.currentLabel,
+                    distanceMeters: state.lastDistanceMeters,
+                    dedupeKey: 'location:left_home',
+                    dedupeMinutes: 15,
+                },
+            });
+        } else {
+            locationAutomationService.simulateUnfamiliarStay();
+            setCareFlowFlash('已模拟陌生地点停留。');
+            const state = locationAutomationService.getState();
+            await sendGuardianNotification({
+                title: '陌生地点停留提醒',
+                message: `【陌生地点停留提醒】张爷爷于${formatMonthDayTime()}在${state.currentLabel}停留，距家约${state.lastDistanceMeters}米，当前位置已被标记为陌生地点。建议家属尽快联系确认。`,
+                purpose: 'location_unfamiliar_alert',
+                metadata: {
+                    locationLabel: state.currentLabel,
+                    distanceMeters: state.lastDistanceMeters,
+                    dedupeKey: `location:unfamiliar:${state.currentLabel}`,
+                    dedupeMinutes: 15,
+                },
+            });
+        }
+        refreshInsightSnapshots();
+    };
+
+    useEffect(() => {
+        refreshInsightSnapshots();
+        const unsubscribeCare = carePlanService.subscribe(() => refreshInsightSnapshots());
+        const unsubscribeLocation = locationAutomationService.subscribe(() => refreshInsightSnapshots());
+        return () => {
+            unsubscribeCare();
+            unsubscribeLocation();
+        };
+    }, []);
 
     // 回放：从最早记录时间（index 0）推进到最后一个点；用 ref 存 interval 便于暂停按钮立即清除
     useEffect(() => {
@@ -1315,6 +1709,30 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         const [avatarProgress, setAvatarProgress] = useState(0);
         const [generatedAvatarUrl, setGeneratedAvatarUrl] = useState<string | null>(null);
 
+        // OpenClaw connection state
+        const [openclawStatus, setOpenclawStatus] = useState<{
+            syncEnabled: boolean;
+            elderId?: string;
+            bridgeBaseUrl?: string;
+            bridgeHealthy?: boolean;
+            gatewayConfigured?: boolean;
+            loading: boolean;
+            error?: string;
+        }>({
+            syncEnabled: openclawSyncService.isEnabled(),
+            elderId: openclawSyncService.getElderId(),
+            bridgeBaseUrl: (import.meta.env.VITE_OPENCLAW_BRIDGE_URL || '').replace(/\/$/, ''),
+            bridgeHealthy: undefined,
+            gatewayConfigured: undefined,
+            loading: false,
+            error: undefined,
+        });
+
+        // Guardian contacts (family members in profile)
+        const [profile, setProfile] = useState<ElderlyProfile | null>(() => aiService.getProfile());
+        const [savingProfile, setSavingProfile] = useState(false);
+        const [profileHint, setProfileHint] = useState<string | null>(null);
+
         // 加载所有音色（Edge 预设 + 克隆）& 订阅选中变化
         const loadVoices = async () => {
             const all = await VoiceService.getAllVoices();
@@ -1326,6 +1744,99 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
             const unsub = voiceSelectionService.subscribe((id) => setSelectedVoiceId(id));
             return unsub;
         }, []);
+
+        // 检测 OpenClaw bridge 与 Gateway 连接状态
+        useEffect(() => {
+            const syncEnabled = openclawSyncService.isEnabled();
+            const elderId = openclawSyncService.getElderId();
+            const bridgeBaseUrl = (import.meta.env.VITE_OPENCLAW_BRIDGE_URL || '').replace(/\/$/, '');
+            setOpenclawStatus((prev) => ({
+                ...prev,
+                syncEnabled,
+                elderId,
+                bridgeBaseUrl,
+                loading: syncEnabled && !!bridgeBaseUrl,
+                error: undefined,
+            }));
+
+            if (!syncEnabled || !bridgeBaseUrl) {
+                return;
+            }
+
+            (async () => {
+                try {
+                    const res = await fetch(`${bridgeBaseUrl}/healthz`, {
+                        headers: {
+                            ...(import.meta.env.VITE_OPENCLAW_BRIDGE_TOKEN
+                                ? { 'x-emobit-bridge-token': import.meta.env.VITE_OPENCLAW_BRIDGE_TOKEN as string }
+                                : {}),
+                        },
+                    });
+                    if (!res.ok) {
+                        throw new Error(`HTTP ${res.status}`);
+                    }
+                    const json = await res.json();
+                    setOpenclawStatus((prev) => ({
+                        ...prev,
+                        loading: false,
+                        bridgeHealthy: !!json.ok,
+                        gatewayConfigured: !!json.gatewayConfigured,
+                    }));
+                } catch (error) {
+                    console.warn('[Settings] OpenClaw bridge health check failed:', error);
+                    setOpenclawStatus((prev) => ({
+                        ...prev,
+                        loading: false,
+                        bridgeHealthy: false,
+                        gatewayConfigured: false,
+                        error: '无法连接到 EmoBit Bridge，请检查 `npm run openclaw:bridge` 是否已启动以及 Token 配置。',
+                    }));
+                }
+            })();
+        }, []);
+
+        const handleGuardianFieldChange = (index: number, field: 'name' | 'relation' | 'phone', value: string) => {
+            setProfile((prev) => {
+                if (!prev) return prev;
+                const nextMembers = [...prev.familyMembers];
+                const current = nextMembers[index] || { name: '', relation: '家属', phone: '' };
+                nextMembers[index] = { ...current, [field]: value };
+                return { ...prev, familyMembers: nextMembers };
+            });
+        };
+
+        const handleAddGuardian = () => {
+            setProfile((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    familyMembers: [
+                        ...prev.familyMembers,
+                        { name: '', relation: '家属', phone: '' },
+                    ],
+                };
+            });
+        };
+
+        const handleRemoveGuardian = (index: number) => {
+            setProfile((prev) => {
+                if (!prev) return prev;
+                const nextMembers = prev.familyMembers.filter((_, i) => i !== index);
+                return { ...prev, familyMembers: nextMembers };
+            });
+        };
+
+        const handleSaveGuardians = () => {
+            if (!profile) return;
+            setSavingProfile(true);
+            try {
+                aiService.setProfile(profile);
+                setProfileHint('已保存家属联系人，并同步到 OpenClaw bridge。');
+                setTimeout(() => setProfileHint(null), 2500);
+            } finally {
+                setSavingProfile(false);
+            }
+        };
 
         // 开始录音
         const handleStartRecording = async () => {
@@ -1744,6 +2255,175 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                                 </div>
                             </div>
                             <ToggleRight size={28} className="text-indigo-600" />
+                        </div>
+
+                        {/* OpenClaw Connection Status */}
+                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
+                                        <Link2 size={18} />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-slate-800 text-sm">OpenClaw 同步</p>
+                                        <p className="text-[11px] text-slate-500">
+                                            {openclawStatus.syncEnabled
+                                                ? `已启用，elderId=${openclawStatus.elderId || '未配置'}`
+                                                : '未启用（检查 VITE_OPENCLAW_* 环境变量）'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <span
+                                    className={`flex items-center text-[11px] font-semibold ${
+                                        openclawStatus.syncEnabled ? 'text-emerald-600' : 'text-slate-400'
+                                    }`}
+                                >
+                                    <span
+                                        className={`w-2 h-2 rounded-full mr-1 ${
+                                            openclawStatus.syncEnabled ? 'bg-emerald-500' : 'bg-slate-300'
+                                        }`}
+                                    />
+                                    {openclawStatus.syncEnabled ? 'ON' : 'OFF'}
+                                </span>
+                            </div>
+
+                            {openclawStatus.bridgeBaseUrl && (
+                                <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 space-y-1">
+                                    <div className="flex items-center justify-between">
+                                        <span className="flex items-center gap-1">
+                                            <Wifi size={12} /> Bridge
+                                        </span>
+                                        <span
+                                            className={`flex items-center gap-1 ${
+                                                openclawStatus.loading
+                                                    ? 'text-slate-400'
+                                                    : openclawStatus.bridgeHealthy
+                                                        ? 'text-emerald-600'
+                                                        : 'text-rose-500'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`w-2 h-2 rounded-full ${
+                                                    openclawStatus.loading
+                                                        ? 'bg-slate-300'
+                                                        : openclawStatus.bridgeHealthy
+                                                            ? 'bg-emerald-500'
+                                                            : 'bg-rose-500'
+                                                }`}
+                                            />
+                                            {openclawStatus.loading
+                                                ? '检测中…'
+                                                : openclawStatus.bridgeHealthy
+                                                    ? '已连接'
+                                                    : '未连接'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="flex items-center gap-1">
+                                            <Activity size={12} /> Gateway
+                                        </span>
+                                        <span
+                                            className={`${
+                                                openclawStatus.gatewayConfigured ? 'text-emerald-600' : 'text-slate-400'
+                                            }`}
+                                        >
+                                            {openclawStatus.gatewayConfigured ? '已配置' : '未知 / 未配置'}
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 pt-1">
+                                        请先启动 `npm run openclaw:bridge`，并在 OpenClaw Gateway 中安装
+                                        EmoBit 插件、消息通道和 `@openclaw/voice-call`。
+                                    </p>
+                                    {openclawStatus.error && (
+                                        <p className="text-[10px] text-rose-500 pt-1">{openclawStatus.error}</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Guardian Contacts Configuration */}
+                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
+                                        <Users size={20} />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-slate-800 text-sm">家属联系人</p>
+                                        <p className="text-[11px] text-slate-500">
+                                            这里配置的家属姓名与手机号会同步到 OpenClaw，用于消息通知与语音外呼。
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {!profile ? (
+                                <p className="text-xs text-slate-500">
+                                    当前尚未加载老人档案，请先在老人端完成基础资料配置。
+                                </p>
+                            ) : (
+                                <>
+                                    <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                                        {profile.familyMembers.map((member, index) => (
+                                            <div
+                                                key={`${member.name || 'guardian'}_${index}`}
+                                                className="flex items-center gap-2"
+                                            >
+                                                <input
+                                                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs"
+                                                    placeholder="姓名"
+                                                    value={member.name}
+                                                    onChange={(e) =>
+                                                        handleGuardianFieldChange(index, 'name', e.target.value)
+                                                    }
+                                                />
+                                                <input
+                                                    className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs"
+                                                    placeholder="关系"
+                                                    value={member.relation}
+                                                    onChange={(e) =>
+                                                        handleGuardianFieldChange(index, 'relation', e.target.value)
+                                                    }
+                                                />
+                                                <input
+                                                    className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 text-xs"
+                                                    placeholder="手机号"
+                                                    value={member.phone || ''}
+                                                    onChange={(e) =>
+                                                        handleGuardianFieldChange(index, 'phone', e.target.value)
+                                                    }
+                                                />
+                                                <button
+                                                    onClick={() => handleRemoveGuardian(index)}
+                                                    className="p-1 text-slate-400 hover:text-rose-500"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center justify-between pt-2">
+                                        <button
+                                            onClick={handleAddGuardian}
+                                            className="flex items-center gap-1 text-[11px] text-indigo-600 font-semibold"
+                                        >
+                                            <Plus size={14} /> 添加联系人
+                                        </button>
+                                        <button
+                                            onClick={handleSaveGuardians}
+                                            disabled={savingProfile}
+                                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-[11px] font-bold rounded-lg"
+                                        >
+                                            {savingProfile ? '保存中…' : '保存并同步'}
+                                        </button>
+                                    </div>
+                                    {profileHint && (
+                                        <p className="text-[11px] text-emerald-600 pt-1 flex items-center gap-1">
+                                            <CheckCircle size={12} /> {profileHint}
+                                        </p>
+                                    )}
+                                </>
+                            )}
                         </div>
                     </div>
 
@@ -3133,13 +3813,32 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                         <ArrowLeft size={14} /> 返回当前位置
                     </button>
                 </div>
+                {guardianNotice && (
+                    <div className={`rounded-2xl border p-3 text-xs space-y-2 ${
+                        guardianNotice.tone === 'success'
+                            ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                            : guardianNotice.tone === 'warn'
+                                ? 'border-amber-100 bg-amber-50 text-amber-700'
+                                : 'border-rose-100 bg-rose-50 text-rose-700'
+                    }`}>
+                        <div className="flex items-center justify-between">
+                            <span className="font-bold">家属提醒反馈</span>
+                            <span className="text-[10px] opacity-70">{formatClockLabel(guardianNotice.timestamp)}</span>
+                        </div>
+                        <div className="font-semibold">{guardianNotice.title}</div>
+                        <div>{guardianNotice.status}</div>
+                        <div className="rounded-xl bg-white/70 px-3 py-2 text-[11px] leading-relaxed">
+                            {guardianNotice.message}
+                        </div>
+                    </div>
+                )}
 
                 <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 pt-2 border-t border-slate-200">
                     <Moon size={14} /> 黄昏守护模拟
                 </h3>
                 <div className="flex flex-col gap-2">
                     <button
-                        onClick={() => sundowningService.startSimulation()}
+                        onClick={simulateSundowningAlert}
                         className="px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl shadow-sm active:scale-95 transition-all text-left"
                     >
                         🌆 模拟: 风险持续上升
@@ -3176,6 +3875,164 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                         {interventionFlash}
                     </div>
                 )}
+
+                <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 pt-2 border-t border-slate-200">
+                    <Clock size={14} /> 语音建提醒与认知记录
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                    <button
+                        onClick={() => simulateVoiceCareFlow('medication')}
+                        className="rounded-xl bg-blue-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                    >
+                        💊 语音建用药
+                    </button>
+                    <button
+                        onClick={() => simulateVoiceCareFlow('followup')}
+                        className="rounded-xl bg-cyan-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                    >
+                        🏥 语音建复诊
+                    </button>
+                    <button
+                        onClick={() => simulateVoiceCareFlow('hydration')}
+                        className="rounded-xl bg-sky-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                    >
+                        💧 喝水提醒
+                    </button>
+                    <button
+                        onClick={() => simulateVoiceCareFlow('sleep')}
+                        className="rounded-xl bg-violet-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                    >
+                        🌙 睡眠提醒
+                    </button>
+                </div>
+                <button
+                    onClick={simulateCognitiveCapture}
+                    className="w-full rounded-xl bg-slate-800 px-4 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                >
+                    🧠 模拟认知问答记录
+                </button>
+                <div className="grid grid-cols-2 gap-2">
+                    <button
+                        onClick={() => simulateMedicationNotification('pending')}
+                        className="rounded-xl bg-amber-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                    >
+                        ⏰ 未服药提醒
+                    </button>
+                    <button
+                        onClick={() => simulateMedicationNotification('taken')}
+                        className="rounded-xl bg-emerald-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                    >
+                        ✅ 已服药确认
+                    </button>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-3 text-xs text-slate-600 space-y-2">
+                    <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-700">7天照护趋势</span>
+                        <span className="text-indigo-600 font-semibold">认知 {cognitiveTrendSnapshot.average} 分</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-xl bg-slate-50 px-2 py-2">
+                            <div className="text-[10px] text-slate-500">提醒完成率</div>
+                            <div className="text-sm font-bold text-slate-800">{careTrend.completionRate}%</div>
+                        </div>
+                        <div className="rounded-xl bg-slate-50 px-2 py-2">
+                            <div className="text-[10px] text-slate-500">服药依从</div>
+                            <div className="text-sm font-bold text-slate-800">{medicationService.getStatistics(7).adherenceRate}%</div>
+                        </div>
+                        <div className="rounded-xl bg-slate-50 px-2 py-2">
+                            <div className="text-[10px] text-slate-500">黄昏峰值</div>
+                            <div className="text-sm font-bold text-slate-800">{sundowningSnapshot.riskScore}</div>
+                        </div>
+                    </div>
+                    {recentAssessments[0] && (
+                        <div className="rounded-xl bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                            最新认知记录：{recentAssessments[0].prompt} · {recentAssessments[0].response}
+                        </div>
+                    )}
+                    {careItems[0] && (
+                        <div className="rounded-xl bg-sky-50 px-3 py-2 text-[11px] text-sky-800">
+                            下一提醒：{careItems[0].title} · {careItems[0].time}
+                        </div>
+                    )}
+                    {careFlowFlash && (
+                        <div className="rounded-xl bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700">
+                            {careFlowFlash}
+                        </div>
+                    )}
+                </div>
+
+                <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 pt-2 border-t border-slate-200">
+                    <MessageSquare size={14} /> 家属飞书反控模拟
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                    <button
+                        onClick={() => postElderAction('speak_text', { text: '张爷爷，张明刚刚在飞书里说晚上会给您打电话。' })}
+                        className="rounded-xl bg-indigo-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                    >
+                        💬 播报家属消息
+                    </button>
+                    <button
+                        onClick={() => postElderAction('open_memory_album', { text: '张爷爷，我们来看看家人的照片。' })}
+                        className="rounded-xl bg-fuchsia-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                    >
+                        🖼 打开相册
+                    </button>
+                    <button
+                        onClick={() => postElderAction('show_medication', { text: '张爷爷，我来提醒您看看今晚的用药安排。' })}
+                        className="rounded-xl bg-emerald-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                    >
+                        💊 打开用药引导
+                    </button>
+                    <button
+                        onClick={() => postElderAction('start_breathing', { text: '张爷爷，我们先慢慢吸气，再慢慢呼气。' })}
+                        className="rounded-xl bg-orange-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                    >
+                        🌬 启动呼吸放松
+                    </button>
+                </div>
+                {familyControlFlash && (
+                    <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-xs text-indigo-700">
+                        {familyControlFlash}
+                    </div>
+                )}
+
+                <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 pt-2 border-t border-slate-200">
+                    <Link2 size={14} /> 定位自动编排
+                </h3>
+                <div className="grid grid-cols-3 gap-2">
+                    <button
+                        onClick={() => simulateLocationAutomation('home')}
+                        className="rounded-xl bg-emerald-500 px-2 py-2.5 text-xs font-bold text-white shadow-sm"
+                    >
+                        到家
+                    </button>
+                    <button
+                        onClick={() => simulateLocationAutomation('leave')}
+                        className="rounded-xl bg-amber-500 px-2 py-2.5 text-xs font-bold text-white shadow-sm"
+                    >
+                        离家
+                    </button>
+                    <button
+                        onClick={() => simulateLocationAutomation('unknown')}
+                        className="rounded-xl bg-rose-500 px-2 py-2.5 text-xs font-bold text-white shadow-sm"
+                    >
+                        陌生停留
+                    </button>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-3 text-xs text-slate-600 space-y-2">
+                    <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-700">当前定位状态</span>
+                        <span className={`font-semibold ${locationAutomationState.currentStatus === 'home' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            {locationAutomationState.currentStatus === 'home' ? '在家' : '外出'}
+                        </span>
+                    </div>
+                    <p>地点：{locationAutomationState.currentLabel} · 距家 {locationAutomationState.lastDistanceMeters}m</p>
+                    {locationAutomationEvents[0] && (
+                        <div className="rounded-xl bg-slate-50 px-3 py-2 text-[11px] text-slate-700">
+                            最近事件：{locationAutomationEvents[0].summary}
+                        </div>
+                    )}
+                </div>
 
                 <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 pt-2 border-t border-slate-200">
                     <Activity size={14} /> 健康数据模拟
@@ -3216,6 +4073,12 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                             <p className="text-[10px] opacity-90 mt-0.5">心率 88 · 血氧 94% · 血压 152/98</p>
                         </button>
                     </div>
+                    <button
+                        onClick={simulateVitalSignAlert}
+                        className="w-full rounded-xl bg-rose-500 px-4 py-2.5 text-left text-xs font-bold text-white shadow-sm"
+                    >
+                        🚨 发送生命体征预警
+                    </button>
                     <h4 className="text-xs font-bold text-slate-600 mb-2">微调指标</h4>
                     <div className="space-y-3">
                         <div className="bg-white/70 rounded-lg p-2">

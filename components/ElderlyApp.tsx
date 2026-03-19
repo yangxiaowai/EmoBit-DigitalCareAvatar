@@ -11,10 +11,12 @@ import { VoiceService } from '../services/api';
 import { voiceSelectionService } from '../services/voiceSelectionService';
 import { aiService, AIResponse } from '../services/aiService';
 import { wanderingService } from '../services/wanderingService';
-import { homeArrivalService } from '../services/homeArrivalService';
 import { medicationService } from '../services/medicationService';
 import { faceService, FaceData } from '../services/faceService';
 import { cognitiveService } from '../services/cognitiveService';
+import { carePlanService } from '../services/carePlanService';
+import { openclawSyncService } from '../services/openclawSyncService';
+import { isGuardianOnlyBridgeMessage } from '../utils/openclawMessageGuards';
 import {
     sundowningService,
     SundowningInterventionPlan,
@@ -31,6 +33,18 @@ import CognitiveReport from './CognitiveReport';
 interface ElderlyAppProps {
     status: SystemStatus;
     simulation: SimulationType;
+    externalMessage?: {
+        id: string;
+        text: string;
+        purpose?: string;
+        timestamp?: number;
+    } | null;
+    externalAction?: {
+        id: string;
+        action: string;
+        payload?: Record<string, unknown>;
+        timestamp?: number;
+    } | null;
 }
 
 // --- Video Avatar Component ---
@@ -464,12 +478,14 @@ const MemoriesFlow = ({ step, onClose, onPrev, onNext }: { step: number; onClose
             </div>
 
             {/* Close Button */}
-            <div className="absolute top-0 right-0 z-10 px-6 pt-12">
+            <div className="absolute top-4 right-4 z-[80] pointer-events-auto">
                 <button
                     onClick={onClose}
-                    className="w-8 h-8 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 text-white hover:bg-white/20 transition-colors z-50"
+                    type="button"
+                    className="w-11 h-11 bg-black/55 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 text-white hover:bg-white/20 transition-colors shadow-lg touch-manipulation"
+                    aria-label="关闭时光相册"
                 >
-                    <X size={18} />
+                    <X size={20} />
                 </button>
             </div>
 
@@ -545,7 +561,8 @@ const MemoriesFlow = ({ step, onClose, onPrev, onNext }: { step: number; onClose
 
 // --- Main Component ---
 
-const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
+const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMessage, externalAction }) => {
+    const EXTERNAL_COMMAND_MAX_AGE_MS = 15000;
     const [time, setTime] = useState<string>('');
     const [dateStr, setDateStr] = useState<string>('');
 
@@ -594,7 +611,8 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
     // 人脸识别状态 (Face Album Feature)
     const [showFaceRecognition, setShowFaceRecognition] = useState(false);
     const [recognizedFace, setRecognizedFace] = useState<FaceData | null>(null);
-
+    const lastExternalMessageIdRef = useRef<string | null>(null);
+    const lastExternalActionIdRef = useRef<string | null>(null);
     // Auto-scroll ref
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const recentVoiceInputsRef = useRef<string[]>([]);
@@ -604,13 +622,43 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
         }
     }, [aiMessage, voiceInputDisplay, isTalking]);
 
+    useEffect(() => {
+        if (!externalMessage?.id || !externalMessage.text) return;
+        if (lastExternalMessageIdRef.current === externalMessage.id) return;
+        lastExternalMessageIdRef.current = externalMessage.id;
+        const messageAge = externalMessage.timestamp ? Date.now() - externalMessage.timestamp : 0;
+        if (messageAge > EXTERNAL_COMMAND_MAX_AGE_MS) {
+            console.info('[ElderlyApp] 忽略过期老人消息:', externalMessage.id);
+            return;
+        }
+
+        if (isGuardianOnlyBridgeMessage(externalMessage)) {
+            console.warn('[ElderlyApp] 忽略家属专属消息，未向老人端播报:', externalMessage.purpose);
+            return;
+        }
+
+        VoiceService.stop();
+        setActiveScenario('none');
+        setStep(0);
+        setVoiceInputDisplay(null);
+        setIsListening(false);
+        setIsThinking(false);
+        setAiMessage(externalMessage.text);
+        setIsTalking(true);
+
+        VoiceService.speak(externalMessage.text, undefined, undefined, () => {
+            setIsTalking(false);
+        }).catch(() => {
+            setIsTalking(false);
+        });
+    }, [externalMessage]);
+
     // Edge 预生成：确认音「嗯」等
     useEffect(() => {
         // EdgeTTS 已移除，不再预加载
     }, []);
 
     // 进入老人端：预拉常用句 + 延迟一次打招呼（仅播一次，避免 React Strict Mode 双挂载导致重复）
-    // 同时检测是否到家，如果到家则询问是否打开时光相册
     useEffect(() => {
         let cancelled = false;
         let greetingTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -622,20 +670,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                 if (available) {
                     console.log('[ElderlyApp] Edge TTS 可用，预加载常用句');
                     VoiceService.preloadClonePhrases();
-
-                    // 检测是否到家且本次会话未询问过
-                    const isAtHome = homeArrivalService.isAtHome();
-                    const alreadyPrompted = homeArrivalService.hasPromptedThisSession();
-
-                    let greeting: string;
-                    if (isAtHome && !alreadyPrompted) {
-                        // 到家了，询问是否打开时光相册
-                        greeting = '张爷爷，您到家了呢！要不要看看时光相册，回忆一下美好时光？';
-                        homeArrivalService.markPrompted();
-                        console.log('[ElderlyApp] 检测到家，询问是否打开时光相册');
-                    } else {
-                        greeting = '张爷爷，我是您的数字人助手。今天身体怎么样？';
-                    }
+                    const greeting = '张爷爷，我是您的数字人助手。今天身体怎么样？';
 
                     setAiMessage(greeting);
                     greetingTimeoutId = setTimeout(() => {
@@ -1142,10 +1177,23 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                             const identity = `这是您的${randomFace.relation}${randomFace.name ? `，${randomFace.name}` : ''}。`;
                             const contactAndStory = [randomFace.contact, randomFace.story].filter(Boolean).join(' ');
                             const fullText = contactAndStory ? `${identity}${contactAndStory}` : identity;
+                            openclawSyncService.syncFaceEvent({
+                                type: randomFace.relation.includes('儿') || randomFace.relation.includes('女') || randomFace.relation.includes('家属')
+                                    ? 'family_arrived'
+                                    : 'recognized',
+                                timestamp: new Date().toISOString(),
+                                face: randomFace,
+                                message: identity,
+                            });
                             VoiceService.speakSegments(fullText);
                         }, 3000);
                     } else {
                         setTimeout(() => {
+                            openclawSyncService.syncFaceEvent({
+                                type: 'unknown',
+                                timestamp: new Date().toISOString(),
+                                message: 'face_not_found',
+                            });
                             VoiceService.speakSegments("相册中暂无照片，请让家属先要在后台添加照片哦。");
                         }, 2000);
                     }
@@ -1165,6 +1213,23 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
             if (!result.text || !result.text.trim()) {
                 console.error('[ElderlyApp] ❌ 识别结果为空，无法调用 AI 服务');
                 throw new Error('识别结果为空');
+            }
+
+            const voicePlan = carePlanService.createFromVoice(result.text);
+            if (voicePlan) {
+                setVoiceInputDisplay(null);
+                setAiMessage(voicePlan.reply);
+                setIsThinking(false);
+                setIsTalking(true);
+                cognitiveService.recordConversation(result.text, voicePlan.reply);
+                await VoiceService.speak(
+                    voicePlan.reply,
+                    undefined,
+                    undefined,
+                    () => setIsTalking(false)
+                );
+                isProcessingRef.current = false;
+                return;
             }
 
             console.log('[ElderlyApp] 开始调用 aiService.chat()...');
@@ -1504,6 +1569,69 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
         }, 800);
     }, []);
 
+    const executeFamilyControlAction = useCallback((action: string, payload: Record<string, unknown> = {}) => {
+        const speech = String(payload.text || payload.message || '').trim();
+
+        setActiveScenario('none');
+        setStep(0);
+
+        if (action === 'open_memory_album') {
+            openAlbum();
+            return;
+        }
+
+        if (action === 'start_breathing') {
+            setShowBreathingGuide(true);
+            setBreathingGuideIndex(0);
+            setAiMessage(speech || '我们一起做一个呼吸放松练习。');
+            setIsTalking(true);
+            VoiceService.speak(speech || '我们一起做一个呼吸放松练习。', undefined, undefined, () => {
+                setIsTalking(false);
+            }).catch(() => setIsTalking(false));
+            return;
+        }
+
+        if (action === 'show_medication') {
+            setAiMessage(speech || '我来带您看看今天的用药安排。');
+            setActiveScenario('meds');
+            setIsTalking(true);
+            VoiceService.speak(speech || '我来带您看看今天的用药安排。', undefined, undefined, () => {
+                setIsTalking(false);
+            }).catch(() => setIsTalking(false));
+            return;
+        }
+
+        if (action === 'show_care_plan') {
+            setAiMessage(speech || '我来播报今天的提醒安排。');
+            setIsTalking(true);
+            VoiceService.speak(speech || '我来播报今天的提醒安排。', undefined, undefined, () => {
+                setIsTalking(false);
+            }).catch(() => setIsTalking(false));
+            return;
+        }
+
+        if (action === 'speak_text' && speech) {
+            setAiMessage(speech);
+            setIsTalking(true);
+            VoiceService.speak(speech, undefined, undefined, () => {
+                setIsTalking(false);
+            }).catch(() => setIsTalking(false));
+        }
+    }, [openAlbum]);
+
+    useEffect(() => {
+        if (!externalAction?.id || !externalAction.action) return;
+        if (lastExternalActionIdRef.current === externalAction.id) return;
+        lastExternalActionIdRef.current = externalAction.id;
+        const actionAge = externalAction.timestamp ? Date.now() - externalAction.timestamp : 0;
+        if (actionAge > EXTERNAL_COMMAND_MAX_AGE_MS) {
+            console.info('[ElderlyApp] 忽略过期联动动作:', externalAction.id, externalAction.action);
+            return;
+        }
+
+        executeFamilyControlAction(externalAction.action, externalAction.payload || {});
+    }, [externalAction, executeFamilyControlAction]);
+
     // Helper to trigger voice command flow (used by both real recognition and simulation)
     const triggerVoiceCommand = useCallback((userText: string, targetScenario: 'nav' | 'meds' | 'memory', aiResponse: string) => {
         // 1. Reset
@@ -1561,7 +1689,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
     // --- Render ---
 
     return (
-        <div className="flex items-center justify-center h-full py-8">
+        <div className="flex h-full items-center justify-center gap-6 px-6 py-8 xl:flex-row flex-col">
             <div className="relative w-[360px] h-[720px] bg-black rounded-[3rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] border-[8px] border-slate-800 overflow-hidden ring-1 ring-slate-900/5 select-none font-sans">
 
                 {/* Status Bar */}
@@ -1639,6 +1767,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                     <MemoriesFlow
                         step={step}
                         onClose={() => {
+                            setStep(0);
                             setActiveScenario('none');
                             VoiceService.stop();
                         }}
@@ -1906,6 +2035,50 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation }) => {
                     onClose={() => setShowCognitiveReport(false)}
                 />
 
+            </div>
+
+            <div className="w-full max-w-[320px] shrink-0">
+                <div className="rounded-[2rem] border border-slate-200 bg-white/95 p-4 shadow-[0_20px_45px_-20px_rgba(15,23,42,0.35)] backdrop-blur-sm">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-bold text-slate-800">家属联动控制台</p>
+                            <p className="text-xs text-slate-500">手机外部控制，不占用老人端界面</p>
+                        </div>
+                        <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-semibold text-indigo-700">
+                            演示控制
+                        </span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                        <button
+                            type="button"
+                            onClick={() => executeFamilyControlAction('speak_text', { text: '张爷爷，张明刚刚在飞书里说晚上会给您打电话。' })}
+                            className="rounded-2xl bg-indigo-500 px-3 py-3 text-left text-xs font-semibold text-white shadow-sm"
+                        >
+                            播报家属消息
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => executeFamilyControlAction('open_memory_album', { text: '张爷爷，我们来看看家人的照片。' })}
+                            className="rounded-2xl bg-fuchsia-500 px-3 py-3 text-left text-xs font-semibold text-white shadow-sm"
+                        >
+                            打开时光相册
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => executeFamilyControlAction('show_medication', { text: '张爷爷，我来提醒您看看今晚的用药安排。' })}
+                            className="rounded-2xl bg-emerald-500 px-3 py-3 text-left text-xs font-semibold text-white shadow-sm"
+                        >
+                            打开用药引导
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => executeFamilyControlAction('start_breathing', { text: '张爷爷，我们先慢慢吸气，再慢慢呼气。' })}
+                            className="rounded-2xl bg-orange-500 px-3 py-3 text-left text-xs font-semibold text-white shadow-sm"
+                        >
+                            启动呼吸放松
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <style>{`

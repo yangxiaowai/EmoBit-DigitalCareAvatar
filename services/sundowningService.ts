@@ -5,6 +5,8 @@
  * - 向 Dashboard 与 App 推送风险快照与告警
  */
 
+import { openclawSyncService } from './openclawSyncService';
+
 export type SundowningRiskLevel = 'low' | 'medium' | 'high';
 
 export type SundowningInterventionType =
@@ -81,7 +83,15 @@ const MAX_ALERT_COUNT = 60;
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-class SundowningService {
+export type SundowningServiceOptions = {
+    /**
+     * 默认开启，用于生产/演示：即便没有新行为，也会每分钟更新一次风险快照。
+     * 单元测试中可关闭，避免常驻定时器造成不确定性。
+     */
+    enableHeartbeat?: boolean;
+};
+
+export class SundowningService {
     private signals: SundowningBehaviorSignal[] = [];
     private snapshots: SundowningRiskSnapshot[] = [];
     private alerts: SundowningPushAlert[] = [];
@@ -98,14 +108,17 @@ class SundowningService {
     private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private interventionAutoCompleteTimer: ReturnType<typeof setTimeout> | null = null;
 
-    constructor() {
+    constructor(options?: SundowningServiceOptions) {
         // 初次生成一条快照，Dashboard 初次渲染就有数据
         this.evaluateRisk(new Date());
 
         // 即便没有新行为，也定时依据时段更新风险
-        this.heartbeatTimer = setInterval(() => {
-            this.evaluateRisk(new Date());
-        }, 60 * 1000);
+        const enableHeartbeat = options?.enableHeartbeat ?? true;
+        if (enableHeartbeat) {
+            this.heartbeatTimer = setInterval(() => {
+                this.evaluateRisk(new Date());
+            }, 60 * 1000);
+        }
     }
 
     recordBehavior(input: SundowningBehaviorSignalInput): SundowningRiskSnapshot {
@@ -423,14 +436,17 @@ class SundowningService {
     }
 
     private emitSnapshot(snapshot: SundowningRiskSnapshot): void {
+        openclawSyncService.syncSundowningSnapshot(snapshot);
         this.snapshotListeners.forEach(listener => listener(snapshot));
     }
 
     private emitAlert(alert: SundowningPushAlert): void {
+        openclawSyncService.syncSundowningAlert(alert);
         this.alertListeners.forEach(listener => listener(alert));
     }
 
     private emitIntervention(plan: SundowningInterventionPlan | null): void {
+        openclawSyncService.syncSundowningIntervention(plan);
         this.interventionListeners.forEach(listener => listener(plan));
     }
 

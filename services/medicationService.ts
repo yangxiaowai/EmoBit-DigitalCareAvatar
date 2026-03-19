@@ -4,6 +4,7 @@
  */
 
 import { VoiceService } from './api';
+import { openclawSyncService } from './openclawSyncService';
 
 // 药物信息
 export interface Medication {
@@ -46,7 +47,7 @@ export interface MedicationEvent {
 
 type MedicationCallback = (event: MedicationEvent) => void;
 
-class MedicationService {
+export class MedicationService {
     private medications: Medication[] = [];
     private logs: MedicationLog[] = [];
     private subscribers: MedicationCallback[] = [];
@@ -57,6 +58,8 @@ class MedicationService {
     constructor() {
         this.loadMedications();
         this.loadLogs();
+        openclawSyncService.syncMedications(this.medications);
+        openclawSyncService.syncMedicationLogs(this.logs);
     }
 
     /**
@@ -74,6 +77,7 @@ class MedicationService {
      */
     private notify(event: MedicationEvent): void {
         this.subscribers.forEach(cb => cb(event));
+        openclawSyncService.syncMedicationEvent(event, this.activeReminder);
     }
 
     /**
@@ -102,6 +106,7 @@ class MedicationService {
         } catch (e) {
             console.warn('[Medication] 保存药物失败:', e);
         }
+        openclawSyncService.syncMedications(this.medications);
     }
 
     /**
@@ -175,6 +180,7 @@ class MedicationService {
         } catch (e) {
             console.warn('[Medication] 加载记录失败:', e);
         }
+        openclawSyncService.syncMedicationLogs(this.logs);
     }
 
     /**
@@ -188,6 +194,7 @@ class MedicationService {
 
         this.logs = this.logs.filter(log => log.date >= cutoff);
         localStorage.setItem('emobit_medication_logs', JSON.stringify(this.logs));
+        openclawSyncService.syncMedicationLogs(this.logs);
     }
 
     /**

@@ -5,6 +5,7 @@
  */
 
 import { medicationService } from './medicationService';
+import { openclawSyncService } from './openclawSyncService';
 
 // 老人档案数据结构
 export interface ElderlyProfile {
@@ -113,6 +114,7 @@ class AIService {
     setProfile(profile: ElderlyProfile): void {
         this.profile = profile;
         localStorage.setItem('emobit_profile', JSON.stringify(profile));
+        openclawSyncService.syncProfile(profile);
     }
 
     /**
@@ -138,6 +140,8 @@ class AIService {
             console.warn('[AI] Failed to load profile:', e);
             this.profile = this.getDefaultProfile();
         }
+
+        openclawSyncService.syncProfile(this.profile);
     }
 
     /**
