@@ -13,6 +13,7 @@ export default defineConfig({
     include: [
       'utils/**/*.{test,spec}.ts',
       'services/**/*.{test,spec}.ts',
+      'backend/**/*.{test,spec}.{ts,js}',
     ],
     exclude: [
       '**/*.{test,spec}.tsx',
@@ -26,4 +27,3 @@ export default defineConfig({
     restoreMocks: true,
   },
 });
-

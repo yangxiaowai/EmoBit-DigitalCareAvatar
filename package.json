@@ -16,6 +16,7 @@
     "test:system": "vitest run -c vitest.system.config.ts --passWithNoTests",
     "test:coverage": "vitest run --coverage",
     "openclaw:bridge": "node openclaw/bridge/server.mjs",
+    "data-server:start": "node backend/data-server/server.mjs",
     "openclaw:cron:bootstrap": "node openclaw/scripts/bootstrap-cron.mjs"
   },
   "dependencies": {
