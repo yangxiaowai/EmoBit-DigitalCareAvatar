@@ -39,8 +39,16 @@ except ImportError:
     print("请安装 websockets: pip install websockets  或在 index-tts 中: uv add websockets")
     sys.exit(1)
 
-# 若设置 INDEX_TTS_HOME，则切换工作目录到 IndexTTS2 项目根
+# 若未设置 INDEX_TTS_HOME，则自动回退到仓库内 index-tts 目录（兼容从项目根直接启动）
 INDEX_TTS_HOME = os.environ.get("INDEX_TTS_HOME")
+if not INDEX_TTS_HOME:
+    _script_dir = Path(__file__).resolve().parent
+    _repo_index_tts = (_script_dir.parent / "index-tts").resolve()
+    if _repo_index_tts.is_dir():
+        INDEX_TTS_HOME = str(_repo_index_tts)
+        os.environ["INDEX_TTS_HOME"] = INDEX_TTS_HOME
+
+# 若设置 INDEX_TTS_HOME，则切换工作目录到 IndexTTS2 项目根
 if INDEX_TTS_HOME:
     abs_home = os.path.abspath(INDEX_TTS_HOME)
     if os.path.isdir(abs_home):

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-19T09:19:48.543Z",
+  "updatedAt": "2026-03-23T07:32:46.720Z",
   "elders": {
     "elder_demo": {
       "profile": {
@@ -120,7 +120,7 @@
           "memoryText": "还记得1995年那次表彰吗？您那时候可是单位的骨干呢！",
           "voiceText": "爸，这是您以前工作的地方，还记得1995年那次表彰吗？",
           "category": "work",
-          "createdAt": "2026-03-19T07:07:25.280Z"
+          "createdAt": "2026-03-23T06:13:21.128Z"
         },
         {
           "id": "demo_park",
@@ -133,7 +133,7 @@
           "memoryText": "小时候您常带我来这里喂鸽子，我还记得那个卖糖葫芦的老奶奶。",
           "voiceText": "爸，这是我们小时候常来的公园，还记得那个卖糖葫芦的老奶奶吗？",
           "category": "family",
-          "createdAt": "2026-03-19T07:07:25.280Z"
+          "createdAt": "2026-03-23T06:13:21.128Z"
         },
         {
           "id": "demo_home",
@@ -146,7 +146,7 @@
           "memoryText": "欢迎回家！今天累了吧，进屋喝杯热茶。",
           "voiceText": "爸，快到家啦！我给您沏好茶了。",
           "category": "daily",
-          "createdAt": "2026-03-19T07:07:25.280Z"
+          "createdAt": "2026-03-23T06:13:21.128Z"
         }
       ],
       "memoryEvents": [],
@@ -168,12 +168,45 @@
         "state": {
           "isWandering": false,
           "wanderingType": "none",
-          "confidence": 0,
+          "confidence": 0.85,
           "duration": 0,
-          "distanceFromHome": 0,
-          "outsideSafeZone": false
+          "distanceFromHome": 1500,
+          "outsideSafeZone": true
         },
-        "events": []
+        "events": [
+          {
+            "type": "wandering.wandering_end",
+            "severity": "info",
+            "timestamp": "2026-03-23T07:13:41.941Z",
+            "payload": {
+              "timestamp": "2026-03-23T07:13:41.938Z",
+              "state": {
+                "isWandering": false,
+                "wanderingType": "none",
+                "confidence": 0.85,
+                "duration": 0,
+                "distanceFromHome": 1500,
+                "outsideSafeZone": true
+              }
+            }
+          },
+          {
+            "type": "wandering.wandering_start",
+            "severity": "critical",
+            "timestamp": "2026-03-23T07:13:31.939Z",
+            "payload": {
+              "timestamp": "2026-03-23T07:13:31.936Z",
+              "state": {
+                "isWandering": true,
+                "wanderingType": "lost",
+                "confidence": 0.85,
+                "duration": 0,
+                "distanceFromHome": 1500,
+                "outsideSafeZone": true
+              }
+            }
+          }
+        ]
       },
       "medications": [
         {
@@ -214,8 +247,138 @@
           "purpose": "控制血压"
         }
       ],
-      "medicationLogs": [],
-      "medicationEvents": [],
+      "medicationLogs": [
+        {
+          "id": "log_1774249469532",
+          "medicationId": "med_2",
+          "medicationName": "二甲双胍",
+          "scheduledTime": "15:04",
+          "actualTime": "15:04",
+          "status": "taken",
+          "date": "2026-03-23"
+        }
+      ],
+      "medicationEvents": [
+        {
+          "type": "medication.taken",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:04:29.536Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "15:04",
+            "timestamp": "2026-03-23T07:04:29.532Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "15:04",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "medication.reminder",
+          "severity": "critical",
+          "timestamp": "2026-03-23T07:04:26.484Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "15:04",
+            "timestamp": "2026-03-23T07:04:26.482Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "15:04",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "medication.taken",
+          "severity": "info",
+          "timestamp": "2026-03-21T01:01:19.466Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "09:01",
+            "timestamp": "2026-03-21T01:01:19.446Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "09:01",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "medication.reminder",
+          "severity": "critical",
+          "timestamp": "2026-03-21T01:01:19.450Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "09:01",
+            "timestamp": "2026-03-21T01:01:19.445Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "09:01",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "medication.taken",
+          "severity": "info",
+          "timestamp": "2026-03-21T01:00:20.927Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "08:12",
+            "timestamp": "2026-03-21T01:00:20.917Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "08:12",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "medication.reminder",
+          "severity": "critical",
+          "timestamp": "2026-03-21T01:00:15.266Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "08:12",
+            "timestamp": "2026-03-21T01:00:15.263Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "08:12",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "medication.reminder",
+          "severity": "critical",
+          "timestamp": "2026-03-21T00:12:41.385Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "08:12",
+            "timestamp": "2026-03-21T00:12:41.382Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "08:12",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        }
+      ],
       "activeReminder": null,
       "health": {
         "metrics": {
@@ -979,6 +1142,111 @@
             "topics": [
               "空间定向"
             ]
+          },
+          {
+            "id": "conv_1774245298474",
+            "userMessage": "今天星期几？我是不是忘记吃药了？",
+            "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+            "timestamp": "2026-03-23T05:54:58.474Z",
+            "sentiment": "neutral",
+            "topics": [
+              "时间定向",
+              "服药"
+            ]
+          },
+          {
+            "id": "conv_1774245298479",
+            "userMessage": "我现在在哪里？",
+            "aiResponse": "您现在在家里，客厅很安全。",
+            "timestamp": "2026-03-23T05:54:58.479Z",
+            "sentiment": "neutral",
+            "topics": [
+              "空间定向"
+            ]
+          },
+          {
+            "id": "conv_1774249454465",
+            "userMessage": "今天星期几？我是不是忘记吃药了？",
+            "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+            "timestamp": "2026-03-23T07:04:14.465Z",
+            "sentiment": "neutral",
+            "topics": [
+              "时间定向",
+              "服药"
+            ]
+          },
+          {
+            "id": "conv_1774249454470",
+            "userMessage": "我现在在哪里？",
+            "aiResponse": "您现在在家里，客厅很安全。",
+            "timestamp": "2026-03-23T07:04:14.470Z",
+            "sentiment": "neutral",
+            "topics": [
+              "空间定向"
+            ]
+          },
+          {
+            "id": "conv_1774250050581",
+            "userMessage": "今天星期几？我是不是忘记吃药了？",
+            "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+            "timestamp": "2026-03-23T07:14:10.581Z",
+            "sentiment": "neutral",
+            "topics": [
+              "时间定向",
+              "服药"
+            ]
+          },
+          {
+            "id": "conv_1774250050582",
+            "userMessage": "我现在在哪里？",
+            "aiResponse": "您现在在家里，客厅很安全。",
+            "timestamp": "2026-03-23T07:14:10.582Z",
+            "sentiment": "neutral",
+            "topics": [
+              "空间定向"
+            ]
+          },
+          {
+            "id": "conv_1774250053494",
+            "userMessage": "今天星期几？我是不是忘记吃药了？",
+            "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+            "timestamp": "2026-03-23T07:14:13.494Z",
+            "sentiment": "neutral",
+            "topics": [
+              "时间定向",
+              "服药"
+            ]
+          },
+          {
+            "id": "conv_1774250053497",
+            "userMessage": "我现在在哪里？",
+            "aiResponse": "您现在在家里，客厅很安全。",
+            "timestamp": "2026-03-23T07:14:13.497Z",
+            "sentiment": "neutral",
+            "topics": [
+              "空间定向"
+            ]
+          },
+          {
+            "id": "conv_1774250058760",
+            "userMessage": "今天星期几？我是不是忘记吃药了？",
+            "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+            "timestamp": "2026-03-23T07:14:18.760Z",
+            "sentiment": "neutral",
+            "topics": [
+              "时间定向",
+              "服药"
+            ]
+          },
+          {
+            "id": "conv_1774250058763",
+            "userMessage": "我现在在哪里？",
+            "aiResponse": "您现在在家里，客厅很安全。",
+            "timestamp": "2026-03-23T07:14:18.763Z",
+            "sentiment": "neutral",
+            "topics": [
+              "空间定向"
+            ]
           }
         ],
         "assessments": [
@@ -1001,30 +1269,390 @@
             "maxScore": 1,
             "notes": "出现地点/路线困惑信号。",
             "timestamp": "2026-03-18T13:38:44.645Z"
+          },
+          {
+            "id": "cog_1774245298477_time",
+            "category": "time_orientation",
+            "prompt": "时间定向",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "重复询问时间，建议持续观察时间定向能力。",
+            "timestamp": "2026-03-23T05:54:58.477Z"
+          },
+          {
+            "id": "cog_1774245298477_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 2 次。",
+            "timestamp": "2026-03-23T05:54:58.477Z"
+          },
+          {
+            "id": "cog_1774245298480_location",
+            "category": "location_orientation",
+            "prompt": "地点定向",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "出现地点/路线困惑信号。",
+            "timestamp": "2026-03-23T05:54:58.480Z"
+          },
+          {
+            "id": "cog_1774245298480_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 2 次。",
+            "timestamp": "2026-03-23T05:54:58.480Z"
+          },
+          {
+            "id": "cog_1774249454468_time",
+            "category": "time_orientation",
+            "prompt": "时间定向",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "重复询问时间，建议持续观察时间定向能力。",
+            "timestamp": "2026-03-23T07:04:14.468Z"
+          },
+          {
+            "id": "cog_1774249454468_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 3 次。",
+            "timestamp": "2026-03-23T07:04:14.468Z"
+          },
+          {
+            "id": "cog_1774249454471_location",
+            "category": "location_orientation",
+            "prompt": "地点定向",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "出现地点/路线困惑信号。",
+            "timestamp": "2026-03-23T07:04:14.471Z"
+          },
+          {
+            "id": "cog_1774249454471_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 3 次。",
+            "timestamp": "2026-03-23T07:04:14.471Z"
+          },
+          {
+            "id": "cog_1774250050582_time",
+            "category": "time_orientation",
+            "prompt": "时间定向",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "重复询问时间，建议持续观察时间定向能力。",
+            "timestamp": "2026-03-23T07:14:10.582Z"
+          },
+          {
+            "id": "cog_1774250050582_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 4 次。",
+            "timestamp": "2026-03-23T07:14:10.582Z"
+          },
+          {
+            "id": "cog_1774250050583_location",
+            "category": "location_orientation",
+            "prompt": "地点定向",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "出现地点/路线困惑信号。",
+            "timestamp": "2026-03-23T07:14:10.583Z"
+          },
+          {
+            "id": "cog_1774250050583_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 4 次。",
+            "timestamp": "2026-03-23T07:14:10.583Z"
+          },
+          {
+            "id": "cog_1774250053496_time",
+            "category": "time_orientation",
+            "prompt": "时间定向",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "重复询问时间，建议持续观察时间定向能力。",
+            "timestamp": "2026-03-23T07:14:13.496Z"
+          },
+          {
+            "id": "cog_1774250053496_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 5 次。",
+            "timestamp": "2026-03-23T07:14:13.496Z"
+          },
+          {
+            "id": "cog_1774250053498_location",
+            "category": "location_orientation",
+            "prompt": "地点定向",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "出现地点/路线困惑信号。",
+            "timestamp": "2026-03-23T07:14:13.498Z"
+          },
+          {
+            "id": "cog_1774250053498_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 5 次。",
+            "timestamp": "2026-03-23T07:14:13.498Z"
+          },
+          {
+            "id": "cog_1774250058762_time",
+            "category": "time_orientation",
+            "prompt": "时间定向",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "重复询问时间，建议持续观察时间定向能力。",
+            "timestamp": "2026-03-23T07:14:18.762Z"
+          },
+          {
+            "id": "cog_1774250058762_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 6 次。",
+            "timestamp": "2026-03-23T07:14:18.762Z"
+          },
+          {
+            "id": "cog_1774250058764_location",
+            "category": "location_orientation",
+            "prompt": "地点定向",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "出现地点/路线困惑信号。",
+            "timestamp": "2026-03-23T07:14:18.764Z"
+          },
+          {
+            "id": "cog_1774250058764_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 6 次。",
+            "timestamp": "2026-03-23T07:14:18.764Z"
           }
         ]
       },
       "sundowning": {
         "snapshot": {
-          "timestamp": 1773911988451,
-          "riskScore": 54,
-          "riskLevel": "medium",
+          "timestamp": 1774251166696,
+          "riskScore": 35,
+          "riskLevel": "low",
           "trend": "stable",
-          "timeWindowWeight": 38,
+          "timeWindowWeight": 8,
           "behaviorSummary": {
-            "confusionScore": 12,
+            "confusionScore": 25,
             "repeatedQuestions": 0,
-            "stepAnomalyScore": 18,
-            "agitationScore": 10
+            "stepAnomalyScore": 29,
+            "agitationScore": 25
           },
           "keyFactors": [
-            "处于黄昏高危时段(16:00-19:00)"
+            "目前信号平稳"
           ],
           "recommendedInterventions": [
-            "personal_music"
+            "family_voice_story"
           ]
         },
         "alerts": [
+          {
+            "id": "sundown_alert_intervention_1774250127539_ooigs",
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「家庭相册回忆」：展示家人照片并讲述温暖故事，强化定向与安全感。",
+            "riskScore": 88,
+            "timestamp": "2026-03-23T07:15:27.539Z"
+          },
+          {
+            "id": "sundown_alert_intervention_1774250127539_ooigs",
+            "timestamp": 1774250127539,
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「家庭相册回忆」：展示家人照片并讲述温暖故事，强化定向与安全感。",
+            "riskScore": 88
+          },
+          {
+            "id": "sundown_alert_intervention_1774250106546_3bl4z",
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「呼吸放松训练」：引导吸气-停顿-呼气，缓解激越与紧张。",
+            "riskScore": 83,
+            "timestamp": "2026-03-23T07:15:06.546Z"
+          },
+          {
+            "id": "sundown_alert_intervention_1774250106546_3bl4z",
+            "timestamp": 1774250106546,
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「呼吸放松训练」：引导吸气-停顿-呼气，缓解激越与紧张。",
+            "riskScore": 83
+          },
+          {
+            "id": "sundown_alert_intervention_1774250097538_jdqsp",
+            "timestamp": 1774250097538,
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "riskScore": 80
+          },
+          {
+            "id": "sundown_alert_intervention_1774250097538_jdqsp",
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "riskScore": 80,
+            "timestamp": "2026-03-23T07:14:57.538Z"
+          },
+          {
+            "id": "sundown_alert_intervention_1774250088538_9l8u4",
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「个性化音乐安抚」：播放熟悉音乐，稳定情绪与节律。",
+            "riskScore": 77,
+            "timestamp": "2026-03-23T07:14:48.539Z"
+          },
+          {
+            "id": "sundown_alert_intervention_1774250088538_9l8u4",
+            "timestamp": 1774250088539,
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「个性化音乐安抚」：播放熟悉音乐，稳定情绪与节律。",
+            "riskScore": 77
+          },
+          {
+            "id": "sundown_alert_intervention_1774250081028_35a9h",
+            "level": "high",
+            "title": "已执行主动干预",
+            "message": "已启动「呼吸放松训练」：引导吸气-停顿-呼气，缓解激越与紧张。",
+            "riskScore": 74,
+            "timestamp": "2026-03-23T07:14:41.028Z"
+          },
+          {
+            "id": "sundown_alert_intervention_1774250081028_35a9h",
+            "timestamp": 1774250081028,
+            "level": "high",
+            "title": "已执行主动干预",
+            "message": "已启动「呼吸放松训练」：引导吸气-停顿-呼气，缓解激越与紧张。",
+            "riskScore": 74
+          },
+          {
+            "id": "sundown_alert_intervention_1774250078724_m4lb7",
+            "level": "high",
+            "title": "已执行主动干预",
+            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "riskScore": 73,
+            "timestamp": "2026-03-23T07:14:38.724Z"
+          },
+          {
+            "id": "sundown_alert_intervention_1774250078724_m4lb7",
+            "timestamp": 1774250078724,
+            "level": "high",
+            "title": "已执行主动干预",
+            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "riskScore": 73
+          },
+          {
+            "id": "sundown_alert_intervention_1774250073543_iwno9",
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "riskScore": 72,
+            "timestamp": "2026-03-23T07:14:33.543Z"
+          },
+          {
+            "id": "sundown_alert_1774250073538_dpmr9",
+            "timestamp": 1774250073538,
+            "level": "high",
+            "title": "黄昏高风险预警",
+            "message": "重复提问次数增加，焦虑激越趋势上升。当前风险指数 72。",
+            "riskScore": 72
+          },
+          {
+            "id": "sundown_alert_1774250073538_dpmr9",
+            "level": "high",
+            "title": "黄昏高风险预警",
+            "message": "重复提问次数增加，焦虑激越趋势上升。当前风险指数 72。",
+            "riskScore": 72,
+            "timestamp": "2026-03-23T07:14:33.538Z"
+          },
+          {
+            "id": "sundown_alert_intervention_1774250073543_iwno9",
+            "timestamp": 1774250073543,
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "riskScore": 72
+          },
+          {
+            "id": "sundown_alert_1774250040538_c99xf",
+            "level": "medium",
+            "title": "黄昏风险上升提醒",
+            "message": "重复提问次数增加。当前风险指数 48。",
+            "riskScore": 48,
+            "timestamp": "2026-03-23T07:14:00.538Z"
+          },
+          {
+            "id": "sundown_alert_1774250040538_c99xf",
+            "timestamp": 1774250040538,
+            "level": "medium",
+            "title": "黄昏风险上升提醒",
+            "message": "重复提问次数增加。当前风险指数 48。",
+            "riskScore": 48
+          },
+          {
+            "id": "sundown_alert_1773914587786_o2fma",
+            "timestamp": 1773914587786,
+            "level": "medium",
+            "title": "黄昏风险上升提醒",
+            "message": "处于黄昏高危时段(16:00-19:00)。当前风险指数 50。",
+            "riskScore": 50
+          },
+          {
+            "id": "sundown_alert_1773914587786_o2fma",
+            "level": "medium",
+            "title": "黄昏风险上升提醒",
+            "message": "处于黄昏高危时段(16:00-19:00)。当前风险指数 50。",
+            "riskScore": 50,
+            "timestamp": "2026-03-19T10:03:07.786Z"
+          },
           {
             "id": "sundown_alert_1773909588474_c1o3n",
             "timestamp": 1773909588474,
@@ -1344,169 +1972,134 @@
             "title": "系统已自动干预",
             "message": "已启动「个性化音乐安抚」：播放熟悉音乐，稳定情绪与节律。",
             "riskScore": 81
-          },
-          {
-            "id": "sundown_alert_intervention_1773836945775_0e4lt",
-            "timestamp": 1773836945775,
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「家庭相册回忆」：展示家人照片并讲述温暖故事，强化定向与安全感。",
-            "riskScore": 81
-          },
-          {
-            "id": "sundown_alert_intervention_1773836945775_0e4lt",
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「家庭相册回忆」：展示家人照片并讲述温暖故事，强化定向与安全感。",
-            "riskScore": 81,
-            "timestamp": "2026-03-18T12:29:05.775Z"
-          },
-          {
-            "id": "sundown_alert_intervention_1773836924775_0qixm",
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「呼吸放松训练」：引导吸气-停顿-呼气，缓解激越与紧张。",
-            "riskScore": 82,
-            "timestamp": "2026-03-18T12:28:44.775Z"
-          },
-          {
-            "id": "sundown_alert_intervention_1773836924775_0qixm",
-            "timestamp": 1773836924775,
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「呼吸放松训练」：引导吸气-停顿-呼气，缓解激越与紧张。",
-            "riskScore": 82
-          },
-          {
-            "id": "sundown_alert_intervention_1773836906647_xxe5h",
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
-            "riskScore": 82,
-            "timestamp": "2026-03-18T12:28:26.647Z"
-          },
-          {
-            "id": "sundown_alert_intervention_1773836906647_xxe5h",
-            "timestamp": 1773836906647,
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
-            "riskScore": 82
-          },
-          {
-            "id": "sundown_alert_intervention_1773836885775_19iy2",
-            "timestamp": 1773836885775,
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「个性化音乐安抚」：播放熟悉音乐，稳定情绪与节律。",
-            "riskScore": 82
-          },
-          {
-            "id": "sundown_alert_intervention_1773836885775_19iy2",
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「个性化音乐安抚」：播放熟悉音乐，稳定情绪与节律。",
-            "riskScore": 82,
-            "timestamp": "2026-03-18T12:28:05.775Z"
-          },
-          {
-            "id": "sundown_alert_1773836866516_2fdbf",
-            "level": "high",
-            "title": "黄昏高风险预警",
-            "message": "困惑/定向障碍信号升高，重复提问次数增加。当前风险指数 82。",
-            "riskScore": 82,
-            "timestamp": "2026-03-18T12:27:46.516Z"
-          },
-          {
-            "id": "sundown_alert_1773836866516_2fdbf",
-            "timestamp": 1773836866516,
-            "level": "high",
-            "title": "黄昏高风险预警",
-            "message": "困惑/定向障碍信号升高，重复提问次数增加。当前风险指数 82。",
-            "riskScore": 82
-          },
-          {
-            "id": "sundown_alert_intervention_1773836864774_5txkt",
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「家庭相册回忆」：展示家人照片并讲述温暖故事，强化定向与安全感。",
-            "riskScore": 82,
-            "timestamp": "2026-03-18T12:27:44.774Z"
-          },
-          {
-            "id": "sundown_alert_intervention_1773836864774_5txkt",
-            "timestamp": 1773836864774,
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「家庭相册回忆」：展示家人照片并讲述温暖故事，强化定向与安全感。",
-            "riskScore": 82
-          },
-          {
-            "id": "sundown_alert_intervention_1773836846647_5g1bs",
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「呼吸放松训练」：引导吸气-停顿-呼气，缓解激越与紧张。",
-            "riskScore": 82,
-            "timestamp": "2026-03-18T12:27:26.647Z"
-          },
-          {
-            "id": "sundown_alert_intervention_1773836846647_5g1bs",
-            "timestamp": 1773836846647,
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「呼吸放松训练」：引导吸气-停顿-呼气，缓解激越与紧张。",
-            "riskScore": 82
-          },
-          {
-            "id": "sundown_alert_intervention_1773836825775_7pe9y",
-            "timestamp": 1773836825775,
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
-            "riskScore": 82
-          },
-          {
-            "id": "sundown_alert_intervention_1773836825775_7pe9y",
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
-            "riskScore": 82,
-            "timestamp": "2026-03-18T12:27:05.775Z"
-          },
-          {
-            "id": "sundown_alert_intervention_1773836804772_c48hb",
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「个性化音乐安抚」：播放熟悉音乐，稳定情绪与节律。",
-            "riskScore": 81,
-            "timestamp": "2026-03-18T12:26:44.772Z"
-          },
-          {
-            "id": "sundown_alert_intervention_1773836804772_c48hb",
-            "timestamp": 1773836804772,
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「个性化音乐安抚」：播放熟悉音乐，稳定情绪与节律。",
-            "riskScore": 81
-          },
-          {
-            "id": "sundown_alert_intervention_1773836786645_bzx72",
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「家庭相册回忆」：展示家人照片并讲述温暖故事，强化定向与安全感。",
-            "riskScore": 81,
-            "timestamp": "2026-03-18T12:26:26.645Z"
-          },
-          {
-            "id": "sundown_alert_intervention_1773836786645_bzx72",
-            "timestamp": 1773836786645,
-            "level": "high",
-            "title": "系统已自动干预",
-            "message": "已启动「家庭相册回忆」：展示家人照片并讲述温暖故事，强化定向与安全感。",
-            "riskScore": 81
           }
         ],
         "interventions": [
+          {
+            "id": "sundown_plan_1774250127538_rqxulw",
+            "type": "family_album_story",
+            "title": "家庭相册回忆",
+            "description": "展示家人照片并讲述温暖故事，强化定向与安全感。",
+            "script": "我们看看家人的照片吧。这是您和家人一起吃饭的那天，大家都很想您、也都在关心您。",
+            "status": "completed",
+            "startedAt": 1774250127538,
+            "source": "auto",
+            "endedAt": 1774250144277
+          },
+          {
+            "id": "sundown_plan_1774250127538_rqxulw",
+            "type": "family_album_story",
+            "title": "家庭相册回忆",
+            "description": "展示家人照片并讲述温暖故事，强化定向与安全感。",
+            "script": "我们看看家人的照片吧。这是您和家人一起吃饭的那天，大家都很想您、也都在关心您。",
+            "status": "running",
+            "startedAt": 1774250127538,
+            "source": "auto"
+          },
+          {
+            "id": "sundown_plan_1774250106545_ihn4s1",
+            "type": "breathing_exercise",
+            "title": "呼吸放松训练",
+            "description": "引导吸气-停顿-呼气，缓解激越与紧张。",
+            "script": "我们一起做三轮呼吸练习：吸气四秒，停两秒，再慢慢呼气六秒。我会一直陪着您。",
+            "status": "completed",
+            "startedAt": 1774250106545,
+            "source": "auto",
+            "endedAt": 1774250124551
+          },
+          {
+            "id": "sundown_plan_1774250106545_ihn4s1",
+            "type": "breathing_exercise",
+            "title": "呼吸放松训练",
+            "description": "引导吸气-停顿-呼气，缓解激越与紧张。",
+            "script": "我们一起做三轮呼吸练习：吸气四秒，停两秒，再慢慢呼气六秒。我会一直陪着您。",
+            "status": "running",
+            "startedAt": 1774250106545,
+            "source": "auto"
+          },
+          {
+            "id": "sundown_plan_1774250097537_sq97t8",
+            "type": "family_voice_story",
+            "title": "家属安抚语音",
+            "description": "播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "script": "爷爷，我是小明，我在这儿陪着您。我们先坐下来喝口温水，慢慢聊，不着急。",
+            "status": "completed",
+            "startedAt": 1774250097537,
+            "source": "auto",
+            "endedAt": 1774250105671
+          },
+          {
+            "id": "sundown_plan_1774250097537_sq97t8",
+            "type": "family_voice_story",
+            "title": "家属安抚语音",
+            "description": "播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "script": "爷爷，我是小明，我在这儿陪着您。我们先坐下来喝口温水，慢慢聊，不着急。",
+            "status": "running",
+            "startedAt": 1774250097537,
+            "source": "auto"
+          },
+          {
+            "id": "sundown_plan_1774250088538_dkmqoc",
+            "type": "personal_music",
+            "title": "个性化音乐安抚",
+            "description": "播放熟悉音乐，稳定情绪与节律。",
+            "script": "我给您放一段您年轻时喜欢的旋律，我们跟着节奏慢慢放松一下。",
+            "status": "completed",
+            "startedAt": 1774250088538,
+            "source": "auto",
+            "endedAt": 1774250096476
+          },
+          {
+            "id": "sundown_plan_1774250088538_dkmqoc",
+            "type": "personal_music",
+            "title": "个性化音乐安抚",
+            "description": "播放熟悉音乐，稳定情绪与节律。",
+            "script": "我给您放一段您年轻时喜欢的旋律，我们跟着节奏慢慢放松一下。",
+            "status": "running",
+            "startedAt": 1774250088538,
+            "source": "auto"
+          },
+          {
+            "id": "sundown_plan_1774250081027_r5d9my",
+            "type": "breathing_exercise",
+            "title": "呼吸放松训练",
+            "description": "引导吸气-停顿-呼气，缓解激越与紧张。",
+            "script": "我们一起做三轮呼吸练习：吸气四秒，停两秒，再慢慢呼气六秒。我会一直陪着您。",
+            "status": "completed",
+            "startedAt": 1774250081027,
+            "source": "manual",
+            "endedAt": 1774250086877
+          },
+          {
+            "id": "sundown_plan_1774250081027_r5d9my",
+            "type": "breathing_exercise",
+            "title": "呼吸放松训练",
+            "description": "引导吸气-停顿-呼气，缓解激越与紧张。",
+            "script": "我们一起做三轮呼吸练习：吸气四秒，停两秒，再慢慢呼气六秒。我会一直陪着您。",
+            "status": "running",
+            "startedAt": 1774250081027,
+            "source": "manual"
+          },
+          {
+            "id": "sundown_plan_1774250078723_czasjx",
+            "type": "family_voice_story",
+            "title": "家属安抚语音",
+            "description": "播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "script": "爷爷，我是小明，我在这儿陪着您。我们先坐下来喝口温水，慢慢聊，不着急。",
+            "status": "running",
+            "startedAt": 1774250078723,
+            "source": "manual"
+          },
+          {
+            "id": "sundown_plan_1774250073540_8hxri8",
+            "type": "family_voice_story",
+            "title": "家属安抚语音",
+            "description": "播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "script": "爷爷，我是小明，我在这儿陪着您。我们先坐下来喝口温水，慢慢聊，不着急。",
+            "status": "running",
+            "startedAt": 1774250073540,
+            "source": "auto"
+          },
           {
             "id": "sundown_plan_1773837211145_shgjgr",
             "type": "family_album_story",
@@ -2010,136 +2603,1524 @@
             "startedAt": 1773836726645,
             "source": "auto",
             "endedAt": 1773836744646
-          },
-          {
-            "id": "sundown_plan_1773836726645_2v6fi7",
-            "type": "personal_music",
-            "title": "个性化音乐安抚",
-            "description": "播放熟悉音乐，稳定情绪与节律。",
-            "script": "我给您放一段您年轻时喜欢的旋律，我们跟着节奏慢慢放松一下。",
-            "status": "running",
-            "startedAt": 1773836726645,
-            "source": "auto"
-          },
-          {
-            "id": "sundown_plan_1773836705774_aq7i6k",
-            "type": "family_album_story",
-            "title": "家庭相册回忆",
-            "description": "展示家人照片并讲述温暖故事，强化定向与安全感。",
-            "script": "我们看看家人的照片吧。这是您和家人一起吃饭的那天，大家都很想您、也都在关心您。",
-            "status": "completed",
-            "startedAt": 1773836705774,
-            "source": "auto",
-            "endedAt": 1773836723815
-          },
-          {
-            "id": "sundown_plan_1773836705774_aq7i6k",
-            "type": "family_album_story",
-            "title": "家庭相册回忆",
-            "description": "展示家人照片并讲述温暖故事，强化定向与安全感。",
-            "script": "我们看看家人的照片吧。这是您和家人一起吃饭的那天，大家都很想您、也都在关心您。",
-            "status": "running",
-            "startedAt": 1773836705774,
-            "source": "auto"
-          },
-          {
-            "id": "sundown_plan_1773836684772_ymnsh1",
-            "type": "breathing_exercise",
-            "title": "呼吸放松训练",
-            "description": "引导吸气-停顿-呼气，缓解激越与紧张。",
-            "script": "我们一起做三轮呼吸练习：吸气四秒，停两秒，再慢慢呼气六秒。我会一直陪着您。",
-            "status": "completed",
-            "startedAt": 1773836684772,
-            "source": "auto",
-            "endedAt": 1773836702803
-          },
-          {
-            "id": "sundown_plan_1773836684772_ymnsh1",
-            "type": "breathing_exercise",
-            "title": "呼吸放松训练",
-            "description": "引导吸气-停顿-呼气，缓解激越与紧张。",
-            "script": "我们一起做三轮呼吸练习：吸气四秒，停两秒，再慢慢呼气六秒。我会一直陪着您。",
-            "status": "running",
-            "startedAt": 1773836684772,
-            "source": "auto"
-          },
-          {
-            "id": "sundown_plan_1773836666644_tm69un",
-            "type": "family_voice_story",
-            "title": "家属安抚语音",
-            "description": "播放家属口吻的安抚叙述，降低焦虑与困惑。",
-            "script": "爷爷，我是小明，我在这儿陪着您。我们先坐下来喝口温水，慢慢聊，不着急。",
-            "status": "completed",
-            "startedAt": 1773836666644,
-            "source": "auto",
-            "endedAt": 1773836684647
-          },
-          {
-            "id": "sundown_plan_1773836666644_tm69un",
-            "type": "family_voice_story",
-            "title": "家属安抚语音",
-            "description": "播放家属口吻的安抚叙述，降低焦虑与困惑。",
-            "script": "爷爷，我是小明，我在这儿陪着您。我们先坐下来喝口温水，慢慢聊，不着急。",
-            "status": "running",
-            "startedAt": 1773836666644,
-            "source": "auto"
-          },
-          {
-            "id": "sundown_plan_1773836645775_nngxlo",
-            "type": "personal_music",
-            "title": "个性化音乐安抚",
-            "description": "播放熟悉音乐，稳定情绪与节律。",
-            "script": "我给您放一段您年轻时喜欢的旋律，我们跟着节奏慢慢放松一下。",
-            "status": "completed",
-            "startedAt": 1773836645775,
-            "source": "auto",
-            "endedAt": 1773836663819
-          },
-          {
-            "id": "sundown_plan_1773836645775_nngxlo",
-            "type": "personal_music",
-            "title": "个性化音乐安抚",
-            "description": "播放熟悉音乐，稳定情绪与节律。",
-            "script": "我给您放一段您年轻时喜欢的旋律，我们跟着节奏慢慢放松一下。",
-            "status": "running",
-            "startedAt": 1773836645775,
-            "source": "auto"
-          },
-          {
-            "id": "sundown_plan_1773836624772_tc92wh",
-            "type": "family_album_story",
-            "title": "家庭相册回忆",
-            "description": "展示家人照片并讲述温暖故事，强化定向与安全感。",
-            "script": "我们看看家人的照片吧。这是您和家人一起吃饭的那天，大家都很想您、也都在关心您。",
-            "status": "completed",
-            "startedAt": 1773836624772,
-            "source": "auto",
-            "endedAt": 1773836642809
-          },
-          {
-            "id": "sundown_plan_1773836624772_tc92wh",
-            "type": "family_album_story",
-            "title": "家庭相册回忆",
-            "description": "展示家人照片并讲述温暖故事，强化定向与安全感。",
-            "script": "我们看看家人的照片吧。这是您和家人一起吃饭的那天，大家都很想您、也都在关心您。",
-            "status": "running",
-            "startedAt": 1773836624772,
-            "source": "auto"
-          },
-          {
-            "id": "sundown_plan_1773836606645_qnd7qz",
-            "type": "breathing_exercise",
-            "title": "呼吸放松训练",
-            "description": "引导吸气-停顿-呼气，缓解激越与紧张。",
-            "script": "我们一起做三轮呼吸练习：吸气四秒，停两秒，再慢慢呼气六秒。我会一直陪着您。",
-            "status": "completed",
-            "startedAt": 1773836606645,
-            "source": "auto",
-            "endedAt": 1773836624648
           }
         ]
       },
       "events": [
+        {
+          "type": "sundowning.intervention",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:15:44.306Z",
+          "payload": {
+            "id": "sundown_plan_1774250127538_rqxulw",
+            "type": "family_album_story",
+            "title": "家庭相册回忆",
+            "status": "completed",
+            "source": "auto",
+            "startedAt": "2026-03-23T07:15:27.538Z",
+            "endedAt": "2026-03-23T07:15:44.277Z"
+          }
+        },
+        {
+          "type": "sundowning.alert",
+          "severity": "critical",
+          "timestamp": "2026-03-23T07:15:27.579Z",
+          "payload": {
+            "id": "sundown_alert_intervention_1774250127539_ooigs",
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「家庭相册回忆」：展示家人照片并讲述温暖故事，强化定向与安全感。",
+            "riskScore": 88,
+            "timestamp": "2026-03-23T07:15:27.539Z"
+          }
+        },
+        {
+          "type": "sundowning.intervention",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:15:27.543Z",
+          "payload": {
+            "id": "sundown_plan_1774250127538_rqxulw",
+            "type": "family_album_story",
+            "title": "家庭相册回忆",
+            "status": "running",
+            "source": "auto",
+            "startedAt": "2026-03-23T07:15:27.538Z",
+            "endedAt": null
+          }
+        },
+        {
+          "type": "sundowning.intervention",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:15:24.564Z",
+          "payload": {
+            "id": "sundown_plan_1774250106545_ihn4s1",
+            "type": "breathing_exercise",
+            "title": "呼吸放松训练",
+            "status": "completed",
+            "source": "auto",
+            "startedAt": "2026-03-23T07:15:06.545Z",
+            "endedAt": "2026-03-23T07:15:24.551Z"
+          }
+        },
+        {
+          "type": "sundowning.alert",
+          "severity": "critical",
+          "timestamp": "2026-03-23T07:15:06.566Z",
+          "payload": {
+            "id": "sundown_alert_intervention_1774250106546_3bl4z",
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「呼吸放松训练」：引导吸气-停顿-呼气，缓解激越与紧张。",
+            "riskScore": 83,
+            "timestamp": "2026-03-23T07:15:06.546Z"
+          }
+        },
+        {
+          "type": "sundowning.intervention",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:15:06.556Z",
+          "payload": {
+            "id": "sundown_plan_1774250106545_ihn4s1",
+            "type": "breathing_exercise",
+            "title": "呼吸放松训练",
+            "status": "running",
+            "source": "auto",
+            "startedAt": "2026-03-23T07:15:06.545Z",
+            "endedAt": null
+          }
+        },
+        {
+          "type": "sundowning.intervention",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:15:05.679Z",
+          "payload": {
+            "id": "sundown_plan_1774250097537_sq97t8",
+            "type": "family_voice_story",
+            "title": "家属安抚语音",
+            "status": "completed",
+            "source": "auto",
+            "startedAt": "2026-03-23T07:14:57.537Z",
+            "endedAt": "2026-03-23T07:15:05.671Z"
+          }
+        },
+        {
+          "type": "sundowning.alert",
+          "severity": "critical",
+          "timestamp": "2026-03-23T07:14:57.551Z",
+          "payload": {
+            "id": "sundown_alert_intervention_1774250097538_jdqsp",
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "riskScore": 80,
+            "timestamp": "2026-03-23T07:14:57.538Z"
+          }
+        },
+        {
+          "type": "sundowning.intervention",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:57.539Z",
+          "payload": {
+            "id": "sundown_plan_1774250097537_sq97t8",
+            "type": "family_voice_story",
+            "title": "家属安抚语音",
+            "status": "running",
+            "source": "auto",
+            "startedAt": "2026-03-23T07:14:57.537Z",
+            "endedAt": null
+          }
+        },
+        {
+          "type": "sundowning.intervention",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:14:56.505Z",
+          "payload": {
+            "id": "sundown_plan_1774250088538_dkmqoc",
+            "type": "personal_music",
+            "title": "个性化音乐安抚",
+            "status": "completed",
+            "source": "auto",
+            "startedAt": "2026-03-23T07:14:48.538Z",
+            "endedAt": "2026-03-23T07:14:56.476Z"
+          }
+        },
+        {
+          "type": "sundowning.alert",
+          "severity": "critical",
+          "timestamp": "2026-03-23T07:14:48.567Z",
+          "payload": {
+            "id": "sundown_alert_intervention_1774250088538_9l8u4",
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「个性化音乐安抚」：播放熟悉音乐，稳定情绪与节律。",
+            "riskScore": 77,
+            "timestamp": "2026-03-23T07:14:48.539Z"
+          }
+        },
+        {
+          "type": "sundowning.intervention",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:48.552Z",
+          "payload": {
+            "id": "sundown_plan_1774250088538_dkmqoc",
+            "type": "personal_music",
+            "title": "个性化音乐安抚",
+            "status": "running",
+            "source": "auto",
+            "startedAt": "2026-03-23T07:14:48.538Z",
+            "endedAt": null
+          }
+        },
+        {
+          "type": "sundowning.intervention",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:14:46.891Z",
+          "payload": {
+            "id": "sundown_plan_1774250081027_r5d9my",
+            "type": "breathing_exercise",
+            "title": "呼吸放松训练",
+            "status": "completed",
+            "source": "manual",
+            "startedAt": "2026-03-23T07:14:41.027Z",
+            "endedAt": "2026-03-23T07:14:46.877Z"
+          }
+        },
+        {
+          "type": "sundowning.alert",
+          "severity": "critical",
+          "timestamp": "2026-03-23T07:14:41.056Z",
+          "payload": {
+            "id": "sundown_alert_intervention_1774250081028_35a9h",
+            "level": "high",
+            "title": "已执行主动干预",
+            "message": "已启动「呼吸放松训练」：引导吸气-停顿-呼气，缓解激越与紧张。",
+            "riskScore": 74,
+            "timestamp": "2026-03-23T07:14:41.028Z"
+          }
+        },
+        {
+          "type": "sundowning.intervention",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:41.040Z",
+          "payload": {
+            "id": "sundown_plan_1774250081027_r5d9my",
+            "type": "breathing_exercise",
+            "title": "呼吸放松训练",
+            "status": "running",
+            "source": "manual",
+            "startedAt": "2026-03-23T07:14:41.027Z",
+            "endedAt": null
+          }
+        },
+        {
+          "type": "sundowning.alert",
+          "severity": "critical",
+          "timestamp": "2026-03-23T07:14:38.754Z",
+          "payload": {
+            "id": "sundown_alert_intervention_1774250078724_m4lb7",
+            "level": "high",
+            "title": "已执行主动干预",
+            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "riskScore": 73,
+            "timestamp": "2026-03-23T07:14:38.724Z"
+          }
+        },
+        {
+          "type": "sundowning.intervention",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:38.740Z",
+          "payload": {
+            "id": "sundown_plan_1774250078723_czasjx",
+            "type": "family_voice_story",
+            "title": "家属安抚语音",
+            "status": "running",
+            "source": "manual",
+            "startedAt": "2026-03-23T07:14:38.723Z",
+            "endedAt": null
+          }
+        },
+        {
+          "type": "sundowning.alert",
+          "severity": "critical",
+          "timestamp": "2026-03-23T07:14:33.638Z",
+          "payload": {
+            "id": "sundown_alert_intervention_1774250073543_iwno9",
+            "level": "high",
+            "title": "系统已自动干预",
+            "message": "已启动「家属安抚语音」：播放家属口吻的安抚叙述，降低焦虑与困惑。",
+            "riskScore": 72,
+            "timestamp": "2026-03-23T07:14:33.543Z"
+          }
+        },
+        {
+          "type": "sundowning.intervention",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:33.591Z",
+          "payload": {
+            "id": "sundown_plan_1774250073540_8hxri8",
+            "type": "family_voice_story",
+            "title": "家属安抚语音",
+            "status": "running",
+            "source": "auto",
+            "startedAt": "2026-03-23T07:14:33.540Z",
+            "endedAt": null
+          }
+        },
+        {
+          "type": "sundowning.alert",
+          "severity": "critical",
+          "timestamp": "2026-03-23T07:14:33.580Z",
+          "payload": {
+            "id": "sundown_alert_1774250073538_dpmr9",
+            "level": "high",
+            "title": "黄昏高风险预警",
+            "message": "重复提问次数增加，焦虑激越趋势上升。当前风险指数 72。",
+            "riskScore": 72,
+            "timestamp": "2026-03-23T07:14:33.538Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:18.853Z",
+          "payload": {
+            "id": "cog_1774250058762_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 6 次。",
+            "timestamp": "2026-03-23T07:14:18.762Z"
+          }
+        },
+        {
+          "type": "simulation.cognitive_capture",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:18.847Z",
+          "payload": {
+            "assessments": [
+              {
+                "id": "cog_1774250058762_repeat",
+                "category": "memory_repetition",
+                "prompt": "重复提问",
+                "response": "今天星期几？我是不是忘记吃药了？",
+                "score": 0,
+                "maxScore": 2,
+                "notes": "近阶段相似问题出现 6 次。",
+                "timestamp": "2026-03-23T07:14:18.762Z"
+              },
+              {
+                "id": "cog_1774250058764_location",
+                "category": "location_orientation",
+                "prompt": "地点定向",
+                "response": "我现在在哪里？",
+                "score": 0,
+                "maxScore": 1,
+                "notes": "出现地点/路线困惑信号。",
+                "timestamp": "2026-03-23T07:14:18.764Z"
+              },
+              {
+                "id": "cog_1774250058764_repeat",
+                "category": "memory_repetition",
+                "prompt": "重复提问",
+                "response": "我现在在哪里？",
+                "score": 0,
+                "maxScore": 2,
+                "notes": "近阶段相似问题出现 6 次。",
+                "timestamp": "2026-03-23T07:14:18.764Z"
+              }
+            ],
+            "trend": {
+              "dates": [
+                "2026-03-23"
+              ],
+              "scores": [
+                57
+              ],
+              "average": 57,
+              "trend": "stable"
+            }
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:18.841Z",
+          "payload": {
+            "id": "cog_1774250058764_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 6 次。",
+            "timestamp": "2026-03-23T07:14:18.764Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:18.833Z",
+          "payload": {
+            "id": "cog_1774250058764_location",
+            "category": "location_orientation",
+            "prompt": "地点定向",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "出现地点/路线困惑信号。",
+            "timestamp": "2026-03-23T07:14:18.764Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:18.812Z",
+          "payload": {
+            "id": "cog_1774250058762_time",
+            "category": "time_orientation",
+            "prompt": "时间定向",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "重复询问时间，建议持续观察时间定向能力。",
+            "timestamp": "2026-03-23T07:14:18.762Z"
+          }
+        },
+        {
+          "type": "cognitive.conversation",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:14:18.795Z",
+          "payload": {
+            "id": "conv_1774250058763",
+            "userMessage": "我现在在哪里？",
+            "aiResponse": "您现在在家里，客厅很安全。",
+            "sentiment": "neutral",
+            "topics": [
+              "空间定向"
+            ],
+            "timestamp": "2026-03-23T07:14:18.763Z"
+          }
+        },
+        {
+          "type": "cognitive.conversation",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:14:18.788Z",
+          "payload": {
+            "id": "conv_1774250058760",
+            "userMessage": "今天星期几？我是不是忘记吃药了？",
+            "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+            "sentiment": "neutral",
+            "topics": [
+              "时间定向",
+              "服药"
+            ],
+            "timestamp": "2026-03-23T07:14:18.760Z"
+          }
+        },
+        {
+          "type": "cognitive.conversation",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:14:13.553Z",
+          "payload": {
+            "id": "conv_1774250053497",
+            "userMessage": "我现在在哪里？",
+            "aiResponse": "您现在在家里，客厅很安全。",
+            "sentiment": "neutral",
+            "topics": [
+              "空间定向"
+            ],
+            "timestamp": "2026-03-23T07:14:13.497Z"
+          }
+        },
+        {
+          "type": "simulation.cognitive_capture",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:13.550Z",
+          "payload": {
+            "assessments": [
+              {
+                "id": "cog_1774250053496_repeat",
+                "category": "memory_repetition",
+                "prompt": "重复提问",
+                "response": "今天星期几？我是不是忘记吃药了？",
+                "score": 0,
+                "maxScore": 2,
+                "notes": "近阶段相似问题出现 5 次。",
+                "timestamp": "2026-03-23T07:14:13.496Z"
+              },
+              {
+                "id": "cog_1774250053498_location",
+                "category": "location_orientation",
+                "prompt": "地点定向",
+                "response": "我现在在哪里？",
+                "score": 0,
+                "maxScore": 1,
+                "notes": "出现地点/路线困惑信号。",
+                "timestamp": "2026-03-23T07:14:13.498Z"
+              },
+              {
+                "id": "cog_1774250053498_repeat",
+                "category": "memory_repetition",
+                "prompt": "重复提问",
+                "response": "我现在在哪里？",
+                "score": 0,
+                "maxScore": 2,
+                "notes": "近阶段相似问题出现 5 次。",
+                "timestamp": "2026-03-23T07:14:13.498Z"
+              }
+            ],
+            "trend": {
+              "dates": [
+                "2026-03-23"
+              ],
+              "scores": [
+                57
+              ],
+              "average": 57,
+              "trend": "stable"
+            }
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:13.546Z",
+          "payload": {
+            "id": "cog_1774250053498_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 5 次。",
+            "timestamp": "2026-03-23T07:14:13.498Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:13.543Z",
+          "payload": {
+            "id": "cog_1774250053498_location",
+            "category": "location_orientation",
+            "prompt": "地点定向",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "出现地点/路线困惑信号。",
+            "timestamp": "2026-03-23T07:14:13.498Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:13.526Z",
+          "payload": {
+            "id": "cog_1774250053496_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 5 次。",
+            "timestamp": "2026-03-23T07:14:13.496Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:13.520Z",
+          "payload": {
+            "id": "cog_1774250053496_time",
+            "category": "time_orientation",
+            "prompt": "时间定向",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "重复询问时间，建议持续观察时间定向能力。",
+            "timestamp": "2026-03-23T07:14:13.496Z"
+          }
+        },
+        {
+          "type": "cognitive.conversation",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:14:13.509Z",
+          "payload": {
+            "id": "conv_1774250053494",
+            "userMessage": "今天星期几？我是不是忘记吃药了？",
+            "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+            "sentiment": "neutral",
+            "topics": [
+              "时间定向",
+              "服药"
+            ],
+            "timestamp": "2026-03-23T07:14:13.494Z"
+          }
+        },
+        {
+          "type": "cognitive.conversation",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:14:10.704Z",
+          "payload": {
+            "id": "conv_1774250050582",
+            "userMessage": "我现在在哪里？",
+            "aiResponse": "您现在在家里，客厅很安全。",
+            "sentiment": "neutral",
+            "topics": [
+              "空间定向"
+            ],
+            "timestamp": "2026-03-23T07:14:10.582Z"
+          }
+        },
+        {
+          "type": "cognitive.conversation",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:14:10.658Z",
+          "payload": {
+            "id": "conv_1774250050581",
+            "userMessage": "今天星期几？我是不是忘记吃药了？",
+            "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+            "sentiment": "neutral",
+            "topics": [
+              "时间定向",
+              "服药"
+            ],
+            "timestamp": "2026-03-23T07:14:10.581Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:10.630Z",
+          "payload": {
+            "id": "cog_1774250050582_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 4 次。",
+            "timestamp": "2026-03-23T07:14:10.582Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:10.624Z",
+          "payload": {
+            "id": "cog_1774250050582_time",
+            "category": "time_orientation",
+            "prompt": "时间定向",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "重复询问时间，建议持续观察时间定向能力。",
+            "timestamp": "2026-03-23T07:14:10.582Z"
+          }
+        },
+        {
+          "type": "simulation.cognitive_capture",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:10.619Z",
+          "payload": {
+            "assessments": [
+              {
+                "id": "cog_1774250050582_repeat",
+                "category": "memory_repetition",
+                "prompt": "重复提问",
+                "response": "今天星期几？我是不是忘记吃药了？",
+                "score": 0,
+                "maxScore": 2,
+                "notes": "近阶段相似问题出现 4 次。",
+                "timestamp": "2026-03-23T07:14:10.582Z"
+              },
+              {
+                "id": "cog_1774250050583_location",
+                "category": "location_orientation",
+                "prompt": "地点定向",
+                "response": "我现在在哪里？",
+                "score": 0,
+                "maxScore": 1,
+                "notes": "出现地点/路线困惑信号。",
+                "timestamp": "2026-03-23T07:14:10.583Z"
+              },
+              {
+                "id": "cog_1774250050583_repeat",
+                "category": "memory_repetition",
+                "prompt": "重复提问",
+                "response": "我现在在哪里？",
+                "score": 0,
+                "maxScore": 2,
+                "notes": "近阶段相似问题出现 4 次。",
+                "timestamp": "2026-03-23T07:14:10.583Z"
+              }
+            ],
+            "trend": {
+              "dates": [],
+              "scores": [],
+              "average": 75,
+              "trend": "stable"
+            }
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:10.616Z",
+          "payload": {
+            "id": "cog_1774250050583_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 4 次。",
+            "timestamp": "2026-03-23T07:14:10.583Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:10.611Z",
+          "payload": {
+            "id": "cog_1774250050583_location",
+            "category": "location_orientation",
+            "prompt": "地点定向",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "出现地点/路线困惑信号。",
+            "timestamp": "2026-03-23T07:14:10.583Z"
+          }
+        },
+        {
+          "type": "sundowning.alert",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:14:00.562Z",
+          "payload": {
+            "id": "sundown_alert_1774250040538_c99xf",
+            "level": "medium",
+            "title": "黄昏风险上升提醒",
+            "message": "重复提问次数增加。当前风险指数 48。",
+            "riskScore": 48,
+            "timestamp": "2026-03-23T07:14:00.538Z"
+          }
+        },
+        {
+          "type": "wandering.wandering_end",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:13:41.941Z",
+          "payload": {
+            "timestamp": "2026-03-23T07:13:41.938Z",
+            "state": {
+              "isWandering": false,
+              "wanderingType": "none",
+              "confidence": 0.85,
+              "duration": 0,
+              "distanceFromHome": 1500,
+              "outsideSafeZone": true
+            }
+          }
+        },
+        {
+          "type": "wandering.wandering_start",
+          "severity": "critical",
+          "timestamp": "2026-03-23T07:13:31.939Z",
+          "payload": {
+            "timestamp": "2026-03-23T07:13:31.936Z",
+            "state": {
+              "isWandering": true,
+              "wanderingType": "lost",
+              "confidence": 0.85,
+              "duration": 0,
+              "distanceFromHome": 1500,
+              "outsideSafeZone": true
+            }
+          }
+        },
+        {
+          "type": "medication.taken",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:04:29.536Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "15:04",
+            "timestamp": "2026-03-23T07:04:29.532Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "15:04",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "medication.reminder",
+          "severity": "critical",
+          "timestamp": "2026-03-23T07:04:26.484Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "15:04",
+            "timestamp": "2026-03-23T07:04:26.482Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "15:04",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:04:14.538Z",
+          "payload": {
+            "id": "cog_1774249454468_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 3 次。",
+            "timestamp": "2026-03-23T07:04:14.468Z"
+          }
+        },
+        {
+          "type": "simulation.cognitive_capture",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:04:14.534Z",
+          "payload": {
+            "assessments": [
+              {
+                "id": "cog_1774249454468_repeat",
+                "category": "memory_repetition",
+                "prompt": "重复提问",
+                "response": "今天星期几？我是不是忘记吃药了？",
+                "score": 0,
+                "maxScore": 2,
+                "notes": "近阶段相似问题出现 3 次。",
+                "timestamp": "2026-03-23T07:04:14.468Z"
+              },
+              {
+                "id": "cog_1774249454471_location",
+                "category": "location_orientation",
+                "prompt": "地点定向",
+                "response": "我现在在哪里？",
+                "score": 0,
+                "maxScore": 1,
+                "notes": "出现地点/路线困惑信号。",
+                "timestamp": "2026-03-23T07:04:14.471Z"
+              },
+              {
+                "id": "cog_1774249454471_repeat",
+                "category": "memory_repetition",
+                "prompt": "重复提问",
+                "response": "我现在在哪里？",
+                "score": 0,
+                "maxScore": 2,
+                "notes": "近阶段相似问题出现 3 次。",
+                "timestamp": "2026-03-23T07:04:14.471Z"
+              }
+            ],
+            "trend": {
+              "dates": [],
+              "scores": [],
+              "average": 75,
+              "trend": "stable"
+            }
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:04:14.530Z",
+          "payload": {
+            "id": "cog_1774249454471_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 3 次。",
+            "timestamp": "2026-03-23T07:04:14.471Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:04:14.522Z",
+          "payload": {
+            "id": "cog_1774249454468_time",
+            "category": "time_orientation",
+            "prompt": "时间定向",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "重复询问时间，建议持续观察时间定向能力。",
+            "timestamp": "2026-03-23T07:04:14.468Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:04:14.509Z",
+          "payload": {
+            "id": "cog_1774249454471_location",
+            "category": "location_orientation",
+            "prompt": "地点定向",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "出现地点/路线困惑信号。",
+            "timestamp": "2026-03-23T07:04:14.471Z"
+          }
+        },
+        {
+          "type": "cognitive.conversation",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:04:14.492Z",
+          "payload": {
+            "id": "conv_1774249454470",
+            "userMessage": "我现在在哪里？",
+            "aiResponse": "您现在在家里，客厅很安全。",
+            "sentiment": "neutral",
+            "topics": [
+              "空间定向"
+            ],
+            "timestamp": "2026-03-23T07:04:14.470Z"
+          }
+        },
+        {
+          "type": "cognitive.conversation",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:04:14.484Z",
+          "payload": {
+            "id": "conv_1774249454465",
+            "userMessage": "今天星期几？我是不是忘记吃药了？",
+            "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+            "sentiment": "neutral",
+            "topics": [
+              "时间定向",
+              "服药"
+            ],
+            "timestamp": "2026-03-23T07:04:14.465Z"
+          }
+        },
+        {
+          "type": "care.reminder_triggered",
+          "severity": "warn",
+          "timestamp": "2026-03-23T07:00:41.934Z",
+          "payload": {
+            "id": "care_evt_1774249241888_8g5p",
+            "itemId": "care_default_water",
+            "item": {
+              "id": "care_default_water",
+              "type": "hydration",
+              "title": "下午喝水提醒",
+              "time": "15:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "system",
+              "instructions": "建议喝一杯温水",
+              "createdAt": "2026-03-18T13:20:27.804Z",
+              "updatedAt": "2026-03-23T07:00:41.886Z",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": "2026-03-23T07:00:41.886Z"
+            },
+            "note": "scheduled",
+            "timestamp": "2026-03-23T07:00:41.888Z"
+          }
+        },
+        {
+          "type": "care.updated",
+          "severity": "info",
+          "timestamp": "2026-03-23T07:00:41.914Z",
+          "payload": {
+            "id": "care_evt_1774249241886_c2lr",
+            "itemId": "care_default_water",
+            "item": {
+              "id": "care_default_water",
+              "type": "hydration",
+              "title": "下午喝水提醒",
+              "time": "15:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "system",
+              "instructions": "建议喝一杯温水",
+              "createdAt": "2026-03-18T13:20:27.804Z",
+              "updatedAt": "2026-03-23T07:00:41.886Z",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": "2026-03-23T07:00:41.886Z"
+            },
+            "timestamp": "2026-03-23T07:00:41.886Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T05:54:58.549Z",
+          "payload": {
+            "id": "cog_1774245298477_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 2 次。",
+            "timestamp": "2026-03-23T05:54:58.477Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T05:54:58.544Z",
+          "payload": {
+            "id": "cog_1774245298477_time",
+            "category": "time_orientation",
+            "prompt": "时间定向",
+            "response": "今天星期几？我是不是忘记吃药了？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "重复询问时间，建议持续观察时间定向能力。",
+            "timestamp": "2026-03-23T05:54:58.477Z"
+          }
+        },
+        {
+          "type": "cognitive.conversation",
+          "severity": "info",
+          "timestamp": "2026-03-23T05:54:58.540Z",
+          "payload": {
+            "id": "conv_1774245298479",
+            "userMessage": "我现在在哪里？",
+            "aiResponse": "您现在在家里，客厅很安全。",
+            "sentiment": "neutral",
+            "topics": [
+              "空间定向"
+            ],
+            "timestamp": "2026-03-23T05:54:58.479Z"
+          }
+        },
+        {
+          "type": "simulation.cognitive_capture",
+          "severity": "warn",
+          "timestamp": "2026-03-23T05:54:58.537Z",
+          "payload": {
+            "assessments": [
+              {
+                "id": "cog_1774245298477_repeat",
+                "category": "memory_repetition",
+                "prompt": "重复提问",
+                "response": "今天星期几？我是不是忘记吃药了？",
+                "score": 0,
+                "maxScore": 2,
+                "notes": "近阶段相似问题出现 2 次。",
+                "timestamp": "2026-03-23T05:54:58.477Z"
+              },
+              {
+                "id": "cog_1774245298480_location",
+                "category": "location_orientation",
+                "prompt": "地点定向",
+                "response": "我现在在哪里？",
+                "score": 0,
+                "maxScore": 1,
+                "notes": "出现地点/路线困惑信号。",
+                "timestamp": "2026-03-23T05:54:58.480Z"
+              },
+              {
+                "id": "cog_1774245298480_repeat",
+                "category": "memory_repetition",
+                "prompt": "重复提问",
+                "response": "我现在在哪里？",
+                "score": 0,
+                "maxScore": 2,
+                "notes": "近阶段相似问题出现 2 次。",
+                "timestamp": "2026-03-23T05:54:58.480Z"
+              }
+            ],
+            "trend": {
+              "dates": [],
+              "scores": [],
+              "average": 75,
+              "trend": "stable"
+            }
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T05:54:58.531Z",
+          "payload": {
+            "id": "cog_1774245298480_repeat",
+            "category": "memory_repetition",
+            "prompt": "重复提问",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 2,
+            "notes": "近阶段相似问题出现 2 次。",
+            "timestamp": "2026-03-23T05:54:58.480Z"
+          }
+        },
+        {
+          "type": "cognitive.assessment",
+          "severity": "warn",
+          "timestamp": "2026-03-23T05:54:58.524Z",
+          "payload": {
+            "id": "cog_1774245298480_location",
+            "category": "location_orientation",
+            "prompt": "地点定向",
+            "response": "我现在在哪里？",
+            "score": 0,
+            "maxScore": 1,
+            "notes": "出现地点/路线困惑信号。",
+            "timestamp": "2026-03-23T05:54:58.480Z"
+          }
+        },
+        {
+          "type": "cognitive.conversation",
+          "severity": "info",
+          "timestamp": "2026-03-23T05:54:58.511Z",
+          "payload": {
+            "id": "conv_1774245298474",
+            "userMessage": "今天星期几？我是不是忘记吃药了？",
+            "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+            "sentiment": "neutral",
+            "topics": [
+              "时间定向",
+              "服药"
+            ],
+            "timestamp": "2026-03-23T05:54:58.474Z"
+          }
+        },
+        {
+          "type": "simulation.voice_care_plan",
+          "severity": "info",
+          "timestamp": "2026-03-21T01:13:55.097Z",
+          "payload": {
+            "kind": "medication",
+            "item": {
+              "type": "medication",
+              "title": "二甲双胍 用药提醒",
+              "time": "20:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "voice",
+              "medicationName": "二甲双胍",
+              "dosage": "500mg一片",
+              "instructions": "饭后服用",
+              "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": null,
+              "id": "care_1774055635049_ifvc",
+              "createdAt": "2026-03-21T01:13:55.049Z",
+              "updatedAt": "2026-03-21T01:13:55.049Z"
+            },
+            "reply": "已经记下了。20:00提醒您服用二甲双胍，剂量是500mg一片。",
+            "source": "elder_family_console"
+          }
+        },
+        {
+          "type": "care.created",
+          "severity": "info",
+          "timestamp": "2026-03-21T01:13:55.059Z",
+          "payload": {
+            "id": "care_evt_1774055635049_ozz5",
+            "itemId": "care_1774055635049_ifvc",
+            "item": {
+              "type": "medication",
+              "title": "二甲双胍 用药提醒",
+              "time": "20:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "voice",
+              "medicationName": "二甲双胍",
+              "dosage": "500mg一片",
+              "instructions": "饭后服用",
+              "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": null,
+              "id": "care_1774055635049_ifvc",
+              "createdAt": "2026-03-21T01:13:55.049Z",
+              "updatedAt": "2026-03-21T01:13:55.049Z"
+            },
+            "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+            "timestamp": "2026-03-21T01:13:55.049Z"
+          }
+        },
+        {
+          "type": "medication.taken",
+          "severity": "info",
+          "timestamp": "2026-03-21T01:01:19.466Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "09:01",
+            "timestamp": "2026-03-21T01:01:19.446Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "09:01",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "medication.reminder",
+          "severity": "critical",
+          "timestamp": "2026-03-21T01:01:19.450Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "09:01",
+            "timestamp": "2026-03-21T01:01:19.445Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "09:01",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "medication.taken",
+          "severity": "info",
+          "timestamp": "2026-03-21T01:00:20.927Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "08:12",
+            "timestamp": "2026-03-21T01:00:20.917Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "08:12",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "care.reminder_triggered",
+          "severity": "warn",
+          "timestamp": "2026-03-21T01:00:17.100Z",
+          "payload": {
+            "id": "care_evt_1774054817089_sqhk",
+            "itemId": "care_1774051873639_ke3x",
+            "item": {
+              "type": "followup",
+              "title": "静安区中心医院复诊 复诊提醒",
+              "time": "09:00",
+              "recurrence": "once",
+              "enabled": true,
+              "createdBy": "voice",
+              "location": "静安区中心医院复诊",
+              "sourceText": "明天上午9点去静安区中心医院复诊",
+              "instructions": "提前准备医保卡和病历",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": "2026-03-21T01:00:17.088Z",
+              "id": "care_1774051873639_ke3x",
+              "createdAt": "2026-03-21T00:11:13.639Z",
+              "updatedAt": "2026-03-21T01:00:17.088Z"
+            },
+            "note": "scheduled",
+            "sourceText": "明天上午9点去静安区中心医院复诊",
+            "timestamp": "2026-03-21T01:00:17.089Z"
+          }
+        },
+        {
+          "type": "care.updated",
+          "severity": "info",
+          "timestamp": "2026-03-21T01:00:17.092Z",
+          "payload": {
+            "id": "care_evt_1774054817088_ww0o",
+            "itemId": "care_1774051873639_ke3x",
+            "item": {
+              "type": "followup",
+              "title": "静安区中心医院复诊 复诊提醒",
+              "time": "09:00",
+              "recurrence": "once",
+              "enabled": true,
+              "createdBy": "voice",
+              "location": "静安区中心医院复诊",
+              "sourceText": "明天上午9点去静安区中心医院复诊",
+              "instructions": "提前准备医保卡和病历",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": "2026-03-21T01:00:17.088Z",
+              "id": "care_1774051873639_ke3x",
+              "createdAt": "2026-03-21T00:11:13.639Z",
+              "updatedAt": "2026-03-21T01:00:17.088Z"
+            },
+            "sourceText": "明天上午9点去静安区中心医院复诊",
+            "timestamp": "2026-03-21T01:00:17.088Z"
+          }
+        },
+        {
+          "type": "medication.reminder",
+          "severity": "critical",
+          "timestamp": "2026-03-21T01:00:15.266Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "08:12",
+            "timestamp": "2026-03-21T01:00:15.263Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "08:12",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "simulation.voice_care_plan",
+          "severity": "info",
+          "timestamp": "2026-03-21T00:59:59.522Z",
+          "payload": {
+            "kind": "medication",
+            "item": {
+              "type": "medication",
+              "title": "二甲双胍 用药提醒",
+              "time": "20:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "voice",
+              "medicationName": "二甲双胍",
+              "dosage": "500mg一片",
+              "instructions": "饭后服用",
+              "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": null,
+              "id": "care_1774054799500_cvue",
+              "createdAt": "2026-03-21T00:59:59.500Z",
+              "updatedAt": "2026-03-21T00:59:59.500Z"
+            },
+            "reply": "已经记下了。20:00提醒您服用二甲双胍，剂量是500mg一片。",
+            "source": "elder_family_console"
+          }
+        },
+        {
+          "type": "care.created",
+          "severity": "info",
+          "timestamp": "2026-03-21T00:59:59.509Z",
+          "payload": {
+            "id": "care_evt_1774054799500_y6by",
+            "itemId": "care_1774054799500_cvue",
+            "item": {
+              "type": "medication",
+              "title": "二甲双胍 用药提醒",
+              "time": "20:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "voice",
+              "medicationName": "二甲双胍",
+              "dosage": "500mg一片",
+              "instructions": "饭后服用",
+              "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": null,
+              "id": "care_1774054799500_cvue",
+              "createdAt": "2026-03-21T00:59:59.500Z",
+              "updatedAt": "2026-03-21T00:59:59.500Z"
+            },
+            "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+            "timestamp": "2026-03-21T00:59:59.500Z"
+          }
+        },
+        {
+          "type": "medication.reminder",
+          "severity": "critical",
+          "timestamp": "2026-03-21T00:12:41.385Z",
+          "payload": {
+            "medicationId": "med_2",
+            "medicationName": "二甲双胍",
+            "scheduledTime": "08:12",
+            "timestamp": "2026-03-21T00:12:41.382Z",
+            "reminder": {
+              "medicationId": "med_2",
+              "scheduledTime": "08:12",
+              "isActive": true,
+              "snoozeCount": 0
+            }
+          }
+        },
+        {
+          "type": "simulation.voice_care_plan",
+          "severity": "info",
+          "timestamp": "2026-03-21T00:11:43.149Z",
+          "payload": {
+            "kind": "medication",
+            "item": {
+              "type": "medication",
+              "title": "二甲双胍 用药提醒",
+              "time": "20:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "voice",
+              "medicationName": "二甲双胍",
+              "dosage": "500mg一片",
+              "instructions": "饭后服用",
+              "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": null,
+              "id": "care_1774051903130_33sd",
+              "createdAt": "2026-03-21T00:11:43.130Z",
+              "updatedAt": "2026-03-21T00:11:43.130Z"
+            },
+            "reply": "已经记下了。20:00提醒您服用二甲双胍，剂量是500mg一片。",
+            "source": "dashboard_button"
+          }
+        },
+        {
+          "type": "care.created",
+          "severity": "info",
+          "timestamp": "2026-03-21T00:11:43.134Z",
+          "payload": {
+            "id": "care_evt_1774051903130_0965",
+            "itemId": "care_1774051903130_33sd",
+            "item": {
+              "type": "medication",
+              "title": "二甲双胍 用药提醒",
+              "time": "20:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "voice",
+              "medicationName": "二甲双胍",
+              "dosage": "500mg一片",
+              "instructions": "饭后服用",
+              "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": null,
+              "id": "care_1774051903130_33sd",
+              "createdAt": "2026-03-21T00:11:43.130Z",
+              "updatedAt": "2026-03-21T00:11:43.130Z"
+            },
+            "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+            "timestamp": "2026-03-21T00:11:43.130Z"
+          }
+        },
+        {
+          "type": "simulation.voice_care_plan",
+          "severity": "info",
+          "timestamp": "2026-03-21T00:11:13.657Z",
+          "payload": {
+            "kind": "followup",
+            "item": {
+              "type": "followup",
+              "title": "静安区中心医院复诊 复诊提醒",
+              "time": "09:00",
+              "recurrence": "once",
+              "enabled": true,
+              "createdBy": "voice",
+              "location": "静安区中心医院复诊",
+              "sourceText": "明天上午9点去静安区中心医院复诊",
+              "instructions": "提前准备医保卡和病历",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": null,
+              "id": "care_1774051873639_ke3x",
+              "createdAt": "2026-03-21T00:11:13.639Z",
+              "updatedAt": "2026-03-21T00:11:13.639Z"
+            },
+            "reply": "好的，我会在09:00提醒您去静安区中心医院复诊复诊。",
+            "source": "dashboard_button"
+          }
+        },
+        {
+          "type": "care.created",
+          "severity": "info",
+          "timestamp": "2026-03-21T00:11:13.642Z",
+          "payload": {
+            "id": "care_evt_1774051873639_hh72",
+            "itemId": "care_1774051873639_ke3x",
+            "item": {
+              "type": "followup",
+              "title": "静安区中心医院复诊 复诊提醒",
+              "time": "09:00",
+              "recurrence": "once",
+              "enabled": true,
+              "createdBy": "voice",
+              "location": "静安区中心医院复诊",
+              "sourceText": "明天上午9点去静安区中心医院复诊",
+              "instructions": "提前准备医保卡和病历",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": null,
+              "id": "care_1774051873639_ke3x",
+              "createdAt": "2026-03-21T00:11:13.639Z",
+              "updatedAt": "2026-03-21T00:11:13.639Z"
+            },
+            "sourceText": "明天上午9点去静安区中心医院复诊",
+            "timestamp": "2026-03-21T00:11:13.639Z"
+          }
+        },
+        {
+          "type": "simulation.voice_care_plan",
+          "severity": "info",
+          "timestamp": "2026-03-21T00:11:06.370Z",
+          "payload": {
+            "kind": "medication",
+            "item": {
+              "type": "medication",
+              "title": "二甲双胍 用药提醒",
+              "time": "20:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "voice",
+              "medicationName": "二甲双胍",
+              "dosage": "500mg一片",
+              "instructions": "饭后服用",
+              "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": null,
+              "id": "care_1774051866357_sjt6",
+              "createdAt": "2026-03-21T00:11:06.357Z",
+              "updatedAt": "2026-03-21T00:11:06.357Z"
+            },
+            "reply": "已经记下了。20:00提醒您服用二甲双胍，剂量是500mg一片。",
+            "source": "dashboard_button"
+          }
+        },
+        {
+          "type": "care.created",
+          "severity": "info",
+          "timestamp": "2026-03-21T00:11:06.360Z",
+          "payload": {
+            "id": "care_evt_1774051866357_a9fa",
+            "itemId": "care_1774051866357_sjt6",
+            "item": {
+              "type": "medication",
+              "title": "二甲双胍 用药提醒",
+              "time": "20:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "voice",
+              "medicationName": "二甲双胍",
+              "dosage": "500mg一片",
+              "instructions": "饭后服用",
+              "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": null,
+              "id": "care_1774051866357_sjt6",
+              "createdAt": "2026-03-21T00:11:06.357Z",
+              "updatedAt": "2026-03-21T00:11:06.357Z"
+            },
+            "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+            "timestamp": "2026-03-21T00:11:06.357Z"
+          }
+        },
+        {
+          "type": "sundowning.alert",
+          "severity": "warn",
+          "timestamp": "2026-03-19T10:03:07.866Z",
+          "payload": {
+            "id": "sundown_alert_1773914587786_o2fma",
+            "level": "medium",
+            "title": "黄昏风险上升提醒",
+            "message": "处于黄昏高危时段(16:00-19:00)。当前风险指数 50。",
+            "riskScore": 50,
+            "timestamp": "2026-03-19T10:03:07.786Z"
+          }
+        },
         {
           "type": "sundowning.alert",
           "severity": "warn",
@@ -5797,6 +7778,47 @@
       ],
       "outboundEvents": [
         {
+          "audience": "elder",
+          "channel": "frontend",
+          "targets": [
+            "ui:elder-app"
+          ],
+          "message": "{\"action\":\"speak_text\",\"payload\":{\"text\":\"张爷爷，该喝水了！建议您现在喝一杯温水，对身体好。\"}}",
+          "purpose": "reminder",
+          "metadata": {
+            "action": "speak_text",
+            "text": "张爷爷，该喝水了！建议您现在喝一杯温水，对身体好。"
+          },
+          "results": [
+            {
+              "channel": "frontend",
+              "target": "ui:elder-app",
+              "stdout": "Queued elder frontend action.",
+              "stderr": ""
+            }
+          ],
+          "timestamp": "2026-03-23T07:03:12.898Z"
+        },
+        {
+          "audience": "elder",
+          "channel": "frontend",
+          "targets": [
+            "ui:elder-app"
+          ],
+          "message": "张爷爷您好！早上8点该吃药了。\n\n1. 盐酸奥司他韦 75mg（抗流感）\n2. 二甲双胍 500mg（控制血糖）\n3. 氨氯地平 5mg（控制血压）\n\n请记得用温水送服。",
+          "purpose": "medication_reminder",
+          "metadata": {},
+          "results": [
+            {
+              "channel": "frontend",
+              "target": "ui:elder-app",
+              "stdout": "Queued for elderly frontend delivery.",
+              "stderr": ""
+            }
+          ],
+          "timestamp": "2026-03-21T01:02:05.734Z"
+        },
+        {
           "audience": "guardians",
           "channel": "feishu",
           "targets": [
@@ -6979,6 +9001,53 @@
       ],
       "uiCommands": [
         {
+          "id": "ui_1774249392898_lia16t",
+          "type": "outbound.recorded",
+          "timestamp": 1774249392898,
+          "payload": {
+            "audience": "elder",
+            "channel": "frontend",
+            "targets": [
+              "ui:elder-app"
+            ],
+            "purpose": "reminder",
+            "message": "{\"action\":\"speak_text\",\"payload\":{\"text\":\"张爷爷，该喝水了！建议您现在喝一杯温水，对身体好。\"}}"
+          }
+        },
+        {
+          "id": "ui_1774249392892_d481hp",
+          "type": "elder.action",
+          "timestamp": 1774249392892,
+          "payload": {
+            "action": "speak_text",
+            "text": "张爷爷，该喝水了！建议您现在喝一杯温水，对身体好。"
+          }
+        },
+        {
+          "id": "ui_1774054925734_qbopjh",
+          "type": "outbound.recorded",
+          "timestamp": 1774054925734,
+          "payload": {
+            "audience": "elder",
+            "channel": "frontend",
+            "targets": [
+              "ui:elder-app"
+            ],
+            "purpose": "medication_reminder",
+            "message": "张爷爷您好！早上8点该吃药了。\n\n1. 盐酸奥司他韦 75mg（抗流感）\n2. 二甲双胍 500mg（控制血糖）\n3. 氨氯地平 5mg（控制血压）\n\n请记得用温水送服。"
+          }
+        },
+        {
+          "id": "ui_1774054925728_19kalh",
+          "type": "elder.message",
+          "timestamp": 1774054925728,
+          "payload": {
+            "message": "张爷爷您好！早上8点该吃药了。\n\n1. 盐酸奥司他韦 75mg（抗流感）\n2. 二甲双胍 500mg（控制血糖）\n3. 氨氯地平 5mg（控制血压）\n\n请记得用温水送服。",
+            "purpose": "medication_reminder",
+            "metadata": {}
+          }
+        },
+        {
           "id": "ui_1773890425423_xx6px8",
           "type": "outbound.recorded",
           "timestamp": 1773890425423,
@@ -8096,9 +10165,9 @@
             "createdBy": "system",
             "instructions": "建议喝一杯温水",
             "createdAt": "2026-03-18T13:20:27.804Z",
-            "updatedAt": "2026-03-19T07:00:48.463Z",
+            "updatedAt": "2026-03-23T07:00:41.886Z",
             "lastCompletedAt": null,
-            "lastTriggeredAt": "2026-03-19T07:00:48.462Z"
+            "lastTriggeredAt": "2026-03-23T07:00:41.886Z"
           },
           {
             "type": "medication",
@@ -8150,6 +10219,47 @@
           }
         ],
         "events": [
+          {
+            "id": "care_evt_1774249241888_8g5p",
+            "type": "reminder_triggered",
+            "itemId": "care_default_water",
+            "item": {
+              "id": "care_default_water",
+              "type": "hydration",
+              "title": "下午喝水提醒",
+              "time": "15:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "system",
+              "instructions": "建议喝一杯温水",
+              "createdAt": "2026-03-18T13:20:27.804Z",
+              "updatedAt": "2026-03-23T07:00:41.886Z",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": "2026-03-23T07:00:41.886Z"
+            },
+            "timestamp": "2026-03-23T07:00:41.888Z",
+            "note": "scheduled"
+          },
+          {
+            "id": "care_evt_1774249241886_c2lr",
+            "type": "updated",
+            "itemId": "care_default_water",
+            "item": {
+              "id": "care_default_water",
+              "type": "hydration",
+              "title": "下午喝水提醒",
+              "time": "15:00",
+              "recurrence": "daily",
+              "enabled": true,
+              "createdBy": "system",
+              "instructions": "建议喝一杯温水",
+              "createdAt": "2026-03-18T13:20:27.804Z",
+              "updatedAt": "2026-03-23T07:00:41.886Z",
+              "lastCompletedAt": null,
+              "lastTriggeredAt": "2026-03-23T07:00:41.886Z"
+            },
+            "timestamp": "2026-03-23T07:00:41.886Z"
+          },
           {
             "id": "care_evt_1773903648471_1sio",
             "type": "reminder_triggered",
@@ -8266,11 +10376,27 @@
         "trend": {
           "days": 7,
           "completionRate": 0,
-          "triggeredCount": 1,
+          "triggeredCount": 2,
           "completedCount": 0,
-          "missedCount": 1
+          "missedCount": 2
         }
-      }
+      },
+      "locationAutomation": {
+        "state": {
+          "currentStatus": "home",
+          "currentLabel": "家中",
+          "lastDistanceMeters": 13,
+          "unfamiliarStay": false,
+          "lastKnownLocation": {
+            "latitude": 31.2193,
+            "longitude": 121.43858,
+            "timestamp": 1774249472431
+          },
+          "lastEventType": "arrived_home"
+        },
+        "events": []
+      },
+      "faceEvents": []
     }
   }
 }

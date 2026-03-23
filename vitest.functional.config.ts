@@ -16,6 +16,7 @@ export default defineConfig({
       'components/**/*.{test,spec}.tsx',
       'src/**/*.test.tsx',
       'src/**/*.spec.tsx',
+      'tests/real/**/*.test.ts',
     ],
     exclude: ['tests/system/**', 'node_modules/**', 'dist/**'],
     testTimeout: 20_000,

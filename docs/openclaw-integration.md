@@ -39,7 +39,14 @@ export EMOBIT_GUARDIAN_TARGETS=user:oc_8939b864fb23419782da5dbe3133a4fc
 export EMOBIT_ELDER_CHANNEL=frontend
 export EMOBIT_ELDER_TARGET=
 export EMOBIT_GUARDIAN_CALL_TO=13800138001
+# 可选：飞书出站依赖本机 openclaw CLI。若报 spawn ENOENT，指定绝对路径，例如：
+# export OPENCLAW_CLI=/opt/homebrew/bin/openclaw
 ```
+
+**排错简述**
+
+- `TypeError: Cannot set properties of undefined (setting 'state')`（`applyStateUpdate`）：多为 `openclaw/bridge/data/state.json` 里某位老人缺少新版字段（如 `locationAutomation`）。Bridge 已在读取时自动 `ensureElderShape` 补全；若仍异常，可停 Bridge 后备份并删除 `state.json` 让 Bridge 重建。
+- `Error: spawn openclaw ENOENT`：当前 shell 的 `PATH` 里找不到 `openclaw` 可执行文件。安装 OpenClaw CLI 并保证在 PATH 中，或设置 `OPENCLAW_CLI` 为绝对路径。
 
 启动：
 

@@ -29,6 +29,8 @@ const DEFAULT_GUARDIAN_TARGETS = splitCsv(process.env.EMOBIT_GUARDIAN_TARGETS ||
 const DEFAULT_ELDER_CHANNEL = process.env.EMOBIT_ELDER_CHANNEL || DEFAULT_GUARDIAN_CHANNEL;
 const DEFAULT_ELDER_TARGET = normalizeTarget(DEFAULT_ELDER_CHANNEL, process.env.EMOBIT_ELDER_TARGET || '');
 const DEFAULT_CALL_TO = process.env.EMOBIT_GUARDIAN_CALL_TO || '';
+/** 飞书/WhatsApp 等出站消息依赖本机可执行的 openclaw CLI；未安装时请配置绝对路径，例如 /opt/homebrew/bin/openclaw */
+const OPENCLAW_CLI = (process.env.OPENCLAW_CLI || 'openclaw').trim();
 const HAS_EXPLICIT_GUARDIAN_CHANNEL = Boolean(String(process.env.EMOBIT_GUARDIAN_CHANNEL || '').trim());
 const HAS_EXPLICIT_ELDER_CHANNEL = Boolean(String(process.env.EMOBIT_ELDER_CHANNEL || '').trim());
 
@@ -392,11 +394,81 @@ function writeState(state) {
     fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
 }
 
+/**
+ * 磁盘上的 elder 可能是旧版结构（缺少 locationAutomation、carePlan.events 等），
+ * 补全后再写入，避免 applyStateUpdate / ingestEvent 访问 undefined。
+ */
+function ensureElderShape(elder) {
+    const d = defaultElderState();
+    for (const key of Object.keys(d)) {
+        if (!(key in elder) || elder[key] == null) {
+            elder[key] = JSON.parse(JSON.stringify(d[key]));
+        }
+    }
+    const la = elder.locationAutomation;
+    if (!la || typeof la !== 'object') {
+        elder.locationAutomation = { state: null, events: [] };
+    } else {
+        if (la.state === undefined) la.state = null;
+        if (!Array.isArray(la.events)) la.events = [];
+    }
+    const cp = elder.carePlan;
+    if (!cp || typeof cp !== 'object') {
+        elder.carePlan = { items: [], events: [], trend: null };
+    } else {
+        if (!Array.isArray(cp.items)) cp.items = [];
+        if (!Array.isArray(cp.events)) cp.events = [];
+    }
+    const w = elder.wandering;
+    if (!w || typeof w !== 'object') {
+        elder.wandering = { state: null, events: [] };
+    } else {
+        if (!Array.isArray(w.events)) w.events = [];
+        if (w.state === undefined) w.state = null;
+    }
+    const s = elder.sundowning;
+    if (!s || typeof s !== 'object') {
+        elder.sundowning = { snapshot: null, alerts: [], interventions: [] };
+    } else {
+        if (!Array.isArray(s.alerts)) s.alerts = [];
+        if (!Array.isArray(s.interventions)) s.interventions = [];
+    }
+    const cog = elder.cognitive;
+    if (!cog || typeof cog !== 'object') {
+        elder.cognitive = { conversations: [], assessments: [] };
+    } else {
+        if (!Array.isArray(cog.conversations)) cog.conversations = [];
+        if (!Array.isArray(cog.assessments)) cog.assessments = [];
+    }
+    if (!elder.health || typeof elder.health !== 'object') {
+        elder.health = { metrics: null, alerts: [] };
+    } else if (!Array.isArray(elder.health.alerts)) {
+        elder.health.alerts = [];
+    }
+    if (!elder.wanderingConfig || typeof elder.wanderingConfig !== 'object') {
+        elder.wanderingConfig = { homeLocation: null, safeZones: [] };
+    } else if (!Array.isArray(elder.wanderingConfig.safeZones)) {
+        elder.wanderingConfig.safeZones = [];
+    }
+    if (!Array.isArray(elder.events)) elder.events = [];
+    if (!Array.isArray(elder.faceEvents)) elder.faceEvents = [];
+    if (!Array.isArray(elder.outboundEvents)) elder.outboundEvents = [];
+    if (!Array.isArray(elder.uiCommands)) elder.uiCommands = [];
+    if (!Array.isArray(elder.memoryAnchors)) elder.memoryAnchors = [];
+    if (!Array.isArray(elder.memoryEvents)) elder.memoryEvents = [];
+    if (!Array.isArray(elder.medications)) elder.medications = [];
+    if (!Array.isArray(elder.medicationLogs)) elder.medicationLogs = [];
+    if (!Array.isArray(elder.medicationEvents)) elder.medicationEvents = [];
+    if (!Array.isArray(elder.guardianContacts)) elder.guardianContacts = [];
+}
+
 function getElderState(state, elderId) {
     if (!state.elders[elderId]) {
         state.elders[elderId] = defaultElderState();
     }
-    return state.elders[elderId];
+    const elder = state.elders[elderId];
+    ensureElderShape(elder);
+    return elder;
 }
 
 function updateState(mutator) {
@@ -901,7 +973,7 @@ function getForwardThrottle(event) {
 
 async function sendMessage({ channel, target, message }) {
     const args = ['message', 'send', '--channel', channel, '--target', target, '--message', message];
-    const { stdout, stderr } = await execFile('openclaw', args, {
+    const { stdout, stderr } = await execFile(OPENCLAW_CLI, args, {
         timeout: 30000,
         env: process.env,
     });
@@ -915,7 +987,7 @@ async function sendMessage({ channel, target, message }) {
 
 async function placeVoiceCall({ to, message, mode = 'notify' }) {
     const args = ['voicecall', 'call', '--to', to, '--message', message, '--mode', mode];
-    const { stdout, stderr } = await execFile('openclaw', args, {
+    const { stdout, stderr } = await execFile(OPENCLAW_CLI, args, {
         timeout: 30000,
         env: process.env,
     });

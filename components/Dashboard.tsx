@@ -10,8 +10,6 @@ import { healthStateService, HealthMetrics, HEALTHY_VITALS, SUBHEALTHY_VITALS, A
 import { mapService } from '../services/mapService';
 import { medicationService, Medication } from '../services/medicationService';
 import { faceService, FaceData } from '../services/faceService';
-import { cognitiveService, CognitiveAssessmentItem } from '../services/cognitiveService';
-import { carePlanService, CarePlanItem, CareTrendSummary } from '../services/carePlanService';
 import { locationAutomationService, LocationAutomationEvent, LocationAutomationState } from '../services/locationAutomationService';
 import { wanderingService } from '../services/wanderingService';
 import { ALBUM_MEMORIES } from '../config/albumMemories';
@@ -887,32 +885,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         }
     };
 
-    const getMedicationSimulationTarget = (): { medication: Medication; scheduledTime: string } | null => {
-        const simulatedTime = formatClockLabel();
-        const activeReminder = medicationService.getActiveReminder();
-        if (activeReminder) {
-            return {
-                medication: activeReminder.medication,
-                scheduledTime: activeReminder.scheduledTime,
-            };
-        }
-
-        const nextMedication = medicationService.getNextMedicationTime();
-        if (nextMedication) {
-            return {
-                medication: nextMedication.medication,
-                scheduledTime: simulatedTime,
-            };
-        }
-
-        const fallbackMedication = medicationService.getMedications()[0];
-        if (!fallbackMedication) return null;
-        return {
-            medication: fallbackMedication,
-            scheduledTime: simulatedTime,
-        };
-    };
-
     const handleManualIntervention = async () => {
         const plan = sundowningService.triggerIntervention(undefined, 'manual');
         if (!plan) return;
@@ -992,13 +964,8 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
     // Simulation State
     const [historyData, setHistoryData] = useState<{ lat: number; lng: number; time: Date; event?: { type: string; title: string; desc?: string } }[]>([]);
     const [trajectoryLoading, setTrajectoryLoading] = useState(false);
-    const [careItems, setCareItems] = useState<CarePlanItem[]>(carePlanService.getUpcomingItems(3));
-    const [careTrend, setCareTrend] = useState<CareTrendSummary>(carePlanService.getTrend());
-    const [recentAssessments, setRecentAssessments] = useState<CognitiveAssessmentItem[]>(cognitiveService.getAssessments(4));
-    const [cognitiveTrendSnapshot, setCognitiveTrendSnapshot] = useState(cognitiveService.getTrend());
     const [locationAutomationState, setLocationAutomationState] = useState<LocationAutomationState>(locationAutomationService.getState());
     const [locationAutomationEvents, setLocationAutomationEvents] = useState<LocationAutomationEvent[]>(locationAutomationService.getEvents(4));
-    const [careFlowFlash, setCareFlowFlash] = useState<string | null>(null);
     const [familyControlFlash, setFamilyControlFlash] = useState<string | null>(null);
     const [guardianNotice, setGuardianNotice] = useState<GuardianNoticeCard | null>(null);
 
@@ -1106,7 +1073,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
             const latestWanderingState = wanderingService.getState();
             setLocationAutomationState(latestLocationState);
             setLocationAutomationEvents(locationAutomationService.getEvents(4));
-            setCareFlowFlash('已模拟疑似走失，并向家属发送预警。');
             void sendGuardianNotification({
                 title: '走失预警',
                 message: `【走失提醒】张爷爷于${formatMonthDayTime()}疑似离开安全范围，当前位置${latestLocationState.currentLabel}，距家约${latestLocationState.lastDistanceMeters}米。系统判定存在${Math.round(latestWanderingState.confidence * 100)}%的走失风险，已开启持续定位关注，请家属尽快联系确认。`,
@@ -1123,89 +1089,9 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         });
     };
 
-    const refreshInsightSnapshots = () => {
-        setCareItems(carePlanService.getUpcomingItems(3));
-        setCareTrend(carePlanService.getTrend());
-        setRecentAssessments(cognitiveService.getAssessments(4));
-        setCognitiveTrendSnapshot(cognitiveService.getTrend());
+    const refreshLocationAutomationSnapshots = () => {
         setLocationAutomationState(locationAutomationService.getState());
         setLocationAutomationEvents(locationAutomationService.getEvents(4));
-    };
-
-    const simulateVoiceCareFlow = (kind: 'medication' | 'hydration' | 'sleep' | 'followup') => {
-        const result = carePlanService.simulateVoicePlan(kind);
-        setCareFlowFlash(`已创建：${result.item.title}（${result.item.time}）`);
-        openclawSyncService.emitScenarioSignal('simulation.voice_care_plan', {
-            kind,
-            item: result.item,
-            reply: result.reply,
-            source: 'dashboard_button',
-        }, 'info');
-        refreshInsightSnapshots();
-    };
-
-    const simulateCognitiveCapture = () => {
-        cognitiveService.recordConversation('今天星期几？我是不是忘记吃药了？', '今天是星期三，您晚饭后的药还没吃，我会提醒您。');
-        cognitiveService.recordConversation('我现在在哪里？', '您现在在家里，客厅很安全。');
-        setCareFlowFlash('已记录一组认知问答与重复提问信号。');
-        openclawSyncService.emitScenarioSignal('simulation.cognitive_capture', {
-            assessments: cognitiveService.getAssessments(3),
-            trend: cognitiveService.getTrend(),
-        }, 'warn');
-        refreshInsightSnapshots();
-    };
-
-    const simulateMedicationNotification = async (mode: 'pending' | 'taken') => {
-        const target = getMedicationSimulationTarget();
-        if (!target) {
-            setCareFlowFlash('暂无可用药物配置，无法模拟服药提醒。');
-            return;
-        }
-
-        if (mode === 'pending') {
-            medicationService.triggerReminder(target.medication, target.scheduledTime);
-            refreshInsightSnapshots();
-            setCareFlowFlash(`已触发未服药提醒：${target.medication.name}（${target.scheduledTime}）`);
-            await sendGuardianNotification({
-                title: '未服药提醒',
-                message: `【未服药提醒】张爷爷计划于${target.scheduledTime}服用${target.medication.name}（${target.medication.dosage}），当前仍未确认服药。系统已在老人端发起语音提醒：${target.medication.instructions}。建议家属稍后电话确认。`,
-                purpose: 'medication_pending_alert',
-                metadata: {
-                    medicationId: target.medication.id,
-                    medicationName: target.medication.name,
-                    scheduledTime: target.scheduledTime,
-                    dedupeKey: `medication:pending:${target.medication.id}:${target.scheduledTime}`,
-                    dedupeMinutes: 30,
-                },
-            });
-            return;
-        }
-
-        let activeReminder = medicationService.getActiveReminder();
-        if (!activeReminder) {
-            medicationService.triggerReminder(target.medication, target.scheduledTime);
-            activeReminder = medicationService.getActiveReminder();
-        }
-        if (!activeReminder) {
-            setCareFlowFlash('服药确认失败，未能生成提醒上下文。');
-            return;
-        }
-
-        medicationService.confirmTaken(activeReminder.medication.id);
-        refreshInsightSnapshots();
-        setCareFlowFlash(`已记录服药完成：${activeReminder.medication.name}`);
-        await sendGuardianNotification({
-            title: '已服药确认',
-            message: `【已服药提醒】张爷爷已于${formatClockLabel()}完成${activeReminder.medication.name}服用，计划时间${activeReminder.scheduledTime}，剂量为${activeReminder.medication.dosage}。系统已记录本次服药完成，请家属放心。`,
-            purpose: 'medication_taken_update',
-            metadata: {
-                medicationId: activeReminder.medication.id,
-                medicationName: activeReminder.medication.name,
-                scheduledTime: activeReminder.scheduledTime,
-                dedupeKey: `medication:taken:${activeReminder.medication.id}:${new Date().toISOString().slice(0, 10)}`,
-                dedupeMinutes: 30,
-            },
-        });
     };
 
     const simulateSundowningAlert = async () => {
@@ -1242,7 +1128,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         const alertSummary = latestAlerts.length > 0
             ? latestAlerts.map((item) => item.message.replace(/[！!]+$/g, '')).join('、')
             : '心率、血氧与血压出现明显异常';
-        setCareFlowFlash('已模拟生命体征异常，并向家属发送健康提醒。');
         await sendGuardianNotification({
             title: '生命体征提醒',
             message: `【生命体征提醒】张爷爷于${formatMonthDayTime()}出现生命体征异常：心率${metrics.heartRate}次/分，血氧${metrics.bloodOxygen}%，血压${metrics.bloodPressure?.systolic}/${metrics.bloodPressure?.diastolic}mmHg。系统判断${alertSummary}，建议尽快复测；如持续异常，请联系家属并评估是否就医。`,
@@ -1278,7 +1163,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
     const simulateLocationAutomation = async (mode: 'home' | 'leave' | 'unknown') => {
         if (mode === 'home') {
             locationAutomationService.simulateArrivalHome();
-            setCareFlowFlash('已模拟到家联动。');
             const state = locationAutomationService.getState();
             await sendGuardianNotification({
                 title: '到家提醒',
@@ -1293,7 +1177,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
             });
         } else if (mode === 'leave') {
             locationAutomationService.simulateLeaveHome();
-            setCareFlowFlash('已模拟离家联动。');
             const state = locationAutomationService.getState();
             await sendGuardianNotification({
                 title: '离家提醒',
@@ -1308,7 +1191,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
             });
         } else {
             locationAutomationService.simulateUnfamiliarStay();
-            setCareFlowFlash('已模拟陌生地点停留。');
             const state = locationAutomationService.getState();
             await sendGuardianNotification({
                 title: '陌生地点停留提醒',
@@ -1322,15 +1204,13 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                 },
             });
         }
-        refreshInsightSnapshots();
+        refreshLocationAutomationSnapshots();
     };
 
     useEffect(() => {
-        refreshInsightSnapshots();
-        const unsubscribeCare = carePlanService.subscribe(() => refreshInsightSnapshots());
-        const unsubscribeLocation = locationAutomationService.subscribe(() => refreshInsightSnapshots());
+        refreshLocationAutomationSnapshots();
+        const unsubscribeLocation = locationAutomationService.subscribe(() => refreshLocationAutomationSnapshots());
         return () => {
-            unsubscribeCare();
             unsubscribeLocation();
         };
     }, []);
@@ -3876,90 +3756,9 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                     </div>
                 )}
 
-                <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 pt-2 border-t border-slate-200">
-                    <Clock size={14} /> 语音建提醒与认知记录
-                </h3>
-                <div className="grid grid-cols-2 gap-2">
-                    <button
-                        onClick={() => simulateVoiceCareFlow('medication')}
-                        className="rounded-xl bg-blue-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
-                    >
-                        💊 语音建用药
-                    </button>
-                    <button
-                        onClick={() => simulateVoiceCareFlow('followup')}
-                        className="rounded-xl bg-cyan-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
-                    >
-                        🏥 语音建复诊
-                    </button>
-                    <button
-                        onClick={() => simulateVoiceCareFlow('hydration')}
-                        className="rounded-xl bg-sky-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
-                    >
-                        💧 喝水提醒
-                    </button>
-                    <button
-                        onClick={() => simulateVoiceCareFlow('sleep')}
-                        className="rounded-xl bg-violet-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
-                    >
-                        🌙 睡眠提醒
-                    </button>
-                </div>
-                <button
-                    onClick={simulateCognitiveCapture}
-                    className="w-full rounded-xl bg-slate-800 px-4 py-2.5 text-left text-xs font-bold text-white shadow-sm"
-                >
-                    🧠 模拟认知问答记录
-                </button>
-                <div className="grid grid-cols-2 gap-2">
-                    <button
-                        onClick={() => simulateMedicationNotification('pending')}
-                        className="rounded-xl bg-amber-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
-                    >
-                        ⏰ 未服药提醒
-                    </button>
-                    <button
-                        onClick={() => simulateMedicationNotification('taken')}
-                        className="rounded-xl bg-emerald-500 px-3 py-2.5 text-left text-xs font-bold text-white shadow-sm"
-                    >
-                        ✅ 已服药确认
-                    </button>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-3 text-xs text-slate-600 space-y-2">
-                    <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-700">7天照护趋势</span>
-                        <span className="text-indigo-600 font-semibold">认知 {cognitiveTrendSnapshot.average} 分</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="rounded-xl bg-slate-50 px-2 py-2">
-                            <div className="text-[10px] text-slate-500">提醒完成率</div>
-                            <div className="text-sm font-bold text-slate-800">{careTrend.completionRate}%</div>
-                        </div>
-                        <div className="rounded-xl bg-slate-50 px-2 py-2">
-                            <div className="text-[10px] text-slate-500">服药依从</div>
-                            <div className="text-sm font-bold text-slate-800">{medicationService.getStatistics(7).adherenceRate}%</div>
-                        </div>
-                        <div className="rounded-xl bg-slate-50 px-2 py-2">
-                            <div className="text-[10px] text-slate-500">黄昏峰值</div>
-                            <div className="text-sm font-bold text-slate-800">{sundowningSnapshot.riskScore}</div>
-                        </div>
-                    </div>
-                    {recentAssessments[0] && (
-                        <div className="rounded-xl bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                            最新认知记录：{recentAssessments[0].prompt} · {recentAssessments[0].response}
-                        </div>
-                    )}
-                    {careItems[0] && (
-                        <div className="rounded-xl bg-sky-50 px-3 py-2 text-[11px] text-sky-800">
-                            下一提醒：{careItems[0].title} · {careItems[0].time}
-                        </div>
-                    )}
-                    {careFlowFlash && (
-                        <div className="rounded-xl bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700">
-                            {careFlowFlash}
-                        </div>
-                    )}
-                </div>
+                <p className="pt-2 border-t border-slate-200 text-[11px] text-slate-500 leading-relaxed">
+                    语音建提醒、认知记录与 7 天照护趋势已移至<strong className="text-slate-700">老人端预览旁 · 家属联动控制台</strong>，便于与老人界面同屏演示。
+                </p>
 
                 <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2 pt-2 border-t border-slate-200">
                     <MessageSquare size={14} /> 家属飞书反控模拟

@@ -12,6 +12,7 @@
     "test:ui": "vitest --ui",
     "test:unit": "vitest run -c vitest.unit.config.ts",
     "test:functional": "vitest run -c vitest.functional.config.ts --passWithNoTests",
+    "test:functional:live": "VITEST_REAL_SERVICES=1 vitest run -c vitest.functional.config.ts tests/real --passWithNoTests",
     "test:system": "vitest run -c vitest.system.config.ts --passWithNoTests",
     "test:coverage": "vitest run --coverage",
     "openclaw:bridge": "node openclaw/bridge/server.mjs",
