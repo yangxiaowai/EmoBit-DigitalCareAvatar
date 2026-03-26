@@ -1,10 +1,11 @@
 import http from 'node:http';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 import dotenv from 'dotenv';
+
+import { DataClient, DataClientError } from './dataClient.mjs';
 
 const execFile = promisify(execFileCallback);
 
@@ -17,7 +18,6 @@ dotenv.config({ path: path.join(process.cwd(), '.env.local') });
 const PORT = Number(process.env.EMOBIT_BRIDGE_PORT || 4318);
 const HOST = process.env.EMOBIT_BRIDGE_HOST || '0.0.0.0';
 const TOKEN = process.env.EMOBIT_BRIDGE_TOKEN || '';
-const STATE_PATH = process.env.EMOBIT_BRIDGE_STATE_PATH || path.join(__dirname, 'data', 'state.json');
 const DEFAULT_ELDER_ID = process.env.EMOBIT_ELDER_ID || 'elder_demo';
 const OPENCLAW_GATEWAY_URL = (process.env.OPENCLAW_GATEWAY_URL || '').replace(/\/$/, '');
 const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || '';
@@ -40,58 +40,10 @@ const MAX_RECENT_ITEMS = 120;
 const MAX_UI_COMMANDS = 120;
 const recentForwardAtByKey = new Map();
 
-const defaultState = () => ({
-    version: 1,
-    updatedAt: new Date().toISOString(),
-    elders: {},
+// ─── Data Client ────────────────────────────────────────────────────────────
+const dataClient = new DataClient({
+    defaultElderId: DEFAULT_ELDER_ID,
 });
-
-const defaultElderState = () => ({
-    profile: null,
-    guardianContacts: [],
-    memoryAnchors: [],
-    memoryEvents: [],
-    wanderingConfig: {
-        homeLocation: null,
-        safeZones: [],
-    },
-    wandering: {
-        state: null,
-        events: [],
-    },
-    medications: [],
-    medicationLogs: [],
-    medicationEvents: [],
-    activeReminder: null,
-    health: {
-        metrics: null,
-        alerts: [],
-    },
-    cognitive: {
-        conversations: [],
-        assessments: [],
-    },
-    carePlan: {
-        items: [],
-        events: [],
-        trend: null,
-    },
-    locationAutomation: {
-        state: null,
-        events: [],
-    },
-    faceEvents: [],
-    sundowning: {
-        snapshot: null,
-        alerts: [],
-        interventions: [],
-    },
-    events: [],
-    outboundEvents: [],
-    uiCommands: [],
-});
-
-ensureStateFile();
 
 const server = http.createServer(async (req, res) => {
     try {
@@ -104,10 +56,12 @@ const server = http.createServer(async (req, res) => {
 
         const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
         if (req.method === 'GET' && url.pathname === '/healthz') {
+            const backendHealth = await dataClient.healthCheck();
             return sendJson(res, 200, {
                 ok: true,
                 gatewayConfigured: !!OPENCLAW_GATEWAY_URL,
-                bridgeStatePath: STATE_PATH,
+                dataBackendUrl: dataClient.baseUrl,
+                dataBackendOk: backendHealth.ok,
             });
         }
 
@@ -117,7 +71,7 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'GET' && url.pathname === '/api/state') {
             const elderId = url.searchParams.get('elderId') || DEFAULT_ELDER_ID;
-            const elder = getElderState(loadState(), elderId);
+            const elder = await dataClient.getElder(elderId);
             return sendJson(res, 200, { ok: true, elderId, state: elder });
         }
 
@@ -125,7 +79,7 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'GET' && url.pathname === '/api/ui/commands') {
             const elderId = url.searchParams.get('elderId') || DEFAULT_ELDER_ID;
             const since = Number(url.searchParams.get('since') || 0);
-            const elder = getElderState(loadState(), elderId);
+            const elder = await dataClient.getElder(elderId);
             const commands = (elder.uiCommands || []).filter((cmd) => {
                 const ts = typeof cmd?.timestamp === 'number' ? cmd.timestamp : new Date(cmd?.timestamp || 0).getTime();
                 return ts > since;
@@ -137,11 +91,9 @@ const server = http.createServer(async (req, res) => {
             const body = await readJson(req);
             const elderId = body.elderId || DEFAULT_ELDER_ID;
             const command = normalizeUiCommand(body.command || body);
-            updateState((state) => {
-                const elder = getElderState(state, elderId);
-                elder.uiCommands = prependLimited(elder.uiCommands || [], command, MAX_UI_COMMANDS);
-                state.updatedAt = new Date().toISOString();
-                return { state, elder };
+            const elder = await dataClient.updateSection(elderId, 'uiCommands', {
+                op: 'prepend',
+                item: command,
             });
             return sendJson(res, 200, { ok: true, elderId, command });
         }
@@ -150,27 +102,17 @@ const server = http.createServer(async (req, res) => {
             const body = await readJson(req);
             const elderId = body.elderId || DEFAULT_ELDER_ID;
             const key = url.pathname.replace('/api/state/', '');
-            const result = updateState((state) => {
-                const elder = getElderState(state, elderId);
-                applyStateUpdate(elder, key, body.payload);
-                state.updatedAt = new Date().toISOString();
-                return { state, elder };
-            });
-            return sendJson(res, 200, { ok: true, elderId, section: key, state: result.elder });
+            const elder = await dataClient.updateSection(elderId, key, body.payload);
+            return sendJson(res, 200, { ok: true, elderId, section: key, state: elder });
         }
 
         if (req.method === 'POST' && url.pathname === '/api/events') {
             const body = await readJson(req);
             const elderId = body.elderId || DEFAULT_ELDER_ID;
             const event = normalizeEvent(body);
-            const result = updateState((state) => {
-                const elder = getElderState(state, elderId);
-                ingestEvent(elder, event);
-                state.updatedAt = new Date().toISOString();
-                return { state, elder };
-            });
+            const { elder } = await dataClient.appendEvent(elderId, event);
 
-            maybeForwardEvent(event, elderId, result.elder).catch((error) => {
+            maybeForwardEvent(event, elderId, elder).catch((error) => {
                 console.warn('[EmoBitBridge] Failed to forward event to OpenClaw:', error);
             });
 
@@ -179,7 +121,7 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'GET' && url.pathname.startsWith('/api/context/')) {
             const elderId = url.searchParams.get('elderId') || DEFAULT_ELDER_ID;
-            const elder = getElderState(loadState(), elderId);
+            const elder = await dataClient.getElder(elderId);
             const contextType = url.pathname.replace('/api/context/', '');
             const context = buildContext(contextType, elder);
             if (!context) {
@@ -191,7 +133,7 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'POST' && url.pathname === '/api/outbound/notify-guardians') {
             const body = await readJson(req);
             const elderId = body.elderId || DEFAULT_ELDER_ID;
-            const elder = getElderState(loadState(), elderId);
+            const elder = await dataClient.getElder(elderId);
             const channel = normalizeChannel(body.channel || resolveGuardianChannel(elder), 'guardian');
             const targets = resolveGuardianTargets(elder, body.targets, channel);
             const metadata = {
@@ -222,7 +164,7 @@ const server = http.createServer(async (req, res) => {
                 target,
                 message: body.message,
             })));
-            recordOutbound(elderId, {
+            await recordOutbound(elderId, {
                 audience: 'guardians',
                 channel,
                 targets,
@@ -237,7 +179,7 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'POST' && url.pathname === '/api/outbound/notify-elder') {
             const body = await readJson(req);
             const elderId = body.elderId || DEFAULT_ELDER_ID;
-            const elder = getElderState(loadState(), elderId);
+            const elder = await dataClient.getElder(elderId);
             if (shouldRouteToGuardiansInstead(body.message, body.purpose, body.metadata)) {
                 const guardianChannel = normalizeChannel(resolveGuardianChannel(elder), 'guardian');
                 const guardianTargets = resolveGuardianTargets(elder, body.targets, guardianChannel);
@@ -273,7 +215,7 @@ const server = http.createServer(async (req, res) => {
                     target,
                     message: body.message,
                 })));
-                recordOutbound(elderId, {
+                await recordOutbound(elderId, {
                     audience: 'guardians',
                     channel: guardianChannel,
                     targets: guardianTargets,
@@ -292,7 +234,7 @@ const server = http.createServer(async (req, res) => {
             }
             const channel = normalizeChannel(body.channel || DEFAULT_ELDER_CHANNEL, 'elder');
             if (isUiElderChannel(channel)) {
-                const result = queueElderMessage(elderId, {
+                const result = await queueElderMessage(elderId, {
                     message: body.message,
                     purpose: body.purpose || 'general',
                     metadata: serialize(body.metadata || {}),
@@ -310,7 +252,7 @@ const server = http.createServer(async (req, res) => {
                 target,
                 message: body.message,
             });
-            recordOutbound(elderId, {
+            await recordOutbound(elderId, {
                 audience: 'elder',
                 channel,
                 targets: [target],
@@ -325,7 +267,7 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'POST' && url.pathname === '/api/outbound/voice-call') {
             const body = await readJson(req);
             const elderId = body.elderId || DEFAULT_ELDER_ID;
-            const elder = getElderState(loadState(), elderId);
+            const elder = await dataClient.getElder(elderId);
             const to = body.to || resolveVoiceCallTarget(elder);
             if (!to) {
                 return sendJson(res, 400, { ok: false, error: 'No voice-call target configured.' });
@@ -335,7 +277,7 @@ const server = http.createServer(async (req, res) => {
                 message: body.message,
                 mode: body.mode || 'notify',
             });
-            recordOutbound(elderId, {
+            await recordOutbound(elderId, {
                 audience: 'guardians',
                 channel: 'voicecall',
                 targets: [to],
@@ -350,7 +292,7 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'POST' && url.pathname === '/api/outbound/elder-action') {
             const body = await readJson(req);
             const elderId = body.elderId || DEFAULT_ELDER_ID;
-            const result = queueElderAction(elderId, {
+            const result = await queueElderAction(elderId, {
                 action: body.action,
                 payload: serialize(body.payload || {}),
                 purpose: body.purpose || 'family_control',
@@ -361,7 +303,8 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, error: 'Not found.' });
     } catch (error) {
         console.error('[EmoBitBridge] Request failed:', error);
-        sendJson(res, 500, {
+        const status = error instanceof DataClientError ? error.status : 500;
+        sendJson(res, status, {
             ok: false,
             error: error instanceof Error ? error.message : String(error),
         });
@@ -370,221 +313,116 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
     console.log(`[EmoBitBridge] Listening on http://${HOST}:${PORT}`);
-    console.log(`[EmoBitBridge] State file: ${STATE_PATH}`);
+    console.log(`[EmoBitBridge] Data Backend: ${dataClient.baseUrl}`);
 });
 
-function ensureStateFile() {
-    fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
-    if (!fs.existsSync(STATE_PATH)) {
-        fs.writeFileSync(STATE_PATH, JSON.stringify(defaultState(), null, 2));
-    }
-}
+// ─── Outbound Recording (via Data Backend) ──────────────────────────────────
 
-function loadState() {
-    ensureStateFile();
+async function recordOutbound(elderId, outbound) {
     try {
-        return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
+        const outboundEntry = {
+            ...outbound,
+            timestamp: new Date().toISOString(),
+        };
+        await dataClient.updateSection(elderId, 'outboundEvents', {
+            op: 'prepend',
+            item: outboundEntry,
+        });
+        await dataClient.updateSection(elderId, 'uiCommands', {
+            op: 'prepend',
+            item: normalizeUiCommand({
+                type: 'outbound.recorded',
+                payload: {
+                    audience: outbound.audience,
+                    channel: outbound.channel,
+                    targets: outbound.targets,
+                    purpose: outbound.purpose,
+                    message: outbound.message,
+                },
+            }),
+        });
     } catch (error) {
-        console.warn('[EmoBitBridge] Failed to read state, using defaults:', error);
-        return defaultState();
+        console.error('[EmoBitBridge] Failed to record outbound via Data Backend:', error);
     }
 }
 
-function writeState(state) {
-    fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
-}
+// ─── Elder Message / Action Queuing ─────────────────────────────────────────
 
-/**
- * 磁盘上的 elder 可能是旧版结构（缺少 locationAutomation、carePlan.events 等），
- * 补全后再写入，避免 applyStateUpdate / ingestEvent 访问 undefined。
- */
-function ensureElderShape(elder) {
-    const d = defaultElderState();
-    for (const key of Object.keys(d)) {
-        if (!(key in elder) || elder[key] == null) {
-            elder[key] = JSON.parse(JSON.stringify(d[key]));
-        }
+async function queueElderMessage(elderId, { message, purpose = 'general', metadata = {} }) {
+    if (shouldRouteToGuardiansInstead(message, purpose, metadata)) {
+        return {
+            channel: 'frontend',
+            target: 'ui:elder-app',
+            stdout: 'Skipped elderly frontend delivery because the message is guardian-facing.',
+            stderr: '',
+        };
     }
-    const la = elder.locationAutomation;
-    if (!la || typeof la !== 'object') {
-        elder.locationAutomation = { state: null, events: [] };
-    } else {
-        if (la.state === undefined) la.state = null;
-        if (!Array.isArray(la.events)) la.events = [];
-    }
-    const cp = elder.carePlan;
-    if (!cp || typeof cp !== 'object') {
-        elder.carePlan = { items: [], events: [], trend: null };
-    } else {
-        if (!Array.isArray(cp.items)) cp.items = [];
-        if (!Array.isArray(cp.events)) cp.events = [];
-    }
-    const w = elder.wandering;
-    if (!w || typeof w !== 'object') {
-        elder.wandering = { state: null, events: [] };
-    } else {
-        if (!Array.isArray(w.events)) w.events = [];
-        if (w.state === undefined) w.state = null;
-    }
-    const s = elder.sundowning;
-    if (!s || typeof s !== 'object') {
-        elder.sundowning = { snapshot: null, alerts: [], interventions: [] };
-    } else {
-        if (!Array.isArray(s.alerts)) s.alerts = [];
-        if (!Array.isArray(s.interventions)) s.interventions = [];
-    }
-    const cog = elder.cognitive;
-    if (!cog || typeof cog !== 'object') {
-        elder.cognitive = { conversations: [], assessments: [] };
-    } else {
-        if (!Array.isArray(cog.conversations)) cog.conversations = [];
-        if (!Array.isArray(cog.assessments)) cog.assessments = [];
-    }
-    if (!elder.health || typeof elder.health !== 'object') {
-        elder.health = { metrics: null, alerts: [] };
-    } else if (!Array.isArray(elder.health.alerts)) {
-        elder.health.alerts = [];
-    }
-    if (!elder.wanderingConfig || typeof elder.wanderingConfig !== 'object') {
-        elder.wanderingConfig = { homeLocation: null, safeZones: [] };
-    } else if (!Array.isArray(elder.wanderingConfig.safeZones)) {
-        elder.wanderingConfig.safeZones = [];
-    }
-    if (!Array.isArray(elder.events)) elder.events = [];
-    if (!Array.isArray(elder.faceEvents)) elder.faceEvents = [];
-    if (!Array.isArray(elder.outboundEvents)) elder.outboundEvents = [];
-    if (!Array.isArray(elder.uiCommands)) elder.uiCommands = [];
-    if (!Array.isArray(elder.memoryAnchors)) elder.memoryAnchors = [];
-    if (!Array.isArray(elder.memoryEvents)) elder.memoryEvents = [];
-    if (!Array.isArray(elder.medications)) elder.medications = [];
-    if (!Array.isArray(elder.medicationLogs)) elder.medicationLogs = [];
-    if (!Array.isArray(elder.medicationEvents)) elder.medicationEvents = [];
-    if (!Array.isArray(elder.guardianContacts)) elder.guardianContacts = [];
-}
 
-function getElderState(state, elderId) {
-    if (!state.elders[elderId]) {
-        state.elders[elderId] = defaultElderState();
-    }
-    const elder = state.elders[elderId];
-    ensureElderShape(elder);
-    return elder;
-}
+    const result = {
+        channel: 'frontend',
+        target: 'ui:elder-app',
+        stdout: 'Queued for elderly frontend delivery.',
+        stderr: '',
+    };
 
-function updateState(mutator) {
-    const state = loadState();
-    const result = mutator(state);
-    writeState(result.state);
+    await dataClient.updateSection(elderId, 'uiCommands', {
+        op: 'prepend',
+        item: normalizeUiCommand({
+            type: 'elder.message',
+            payload: {
+                message,
+                purpose,
+                metadata,
+            },
+        }),
+    });
+
+    await recordOutbound(elderId, {
+        audience: 'elder',
+        channel: 'frontend',
+        targets: [result.target],
+        message,
+        purpose,
+        metadata,
+        results: [result],
+    });
+
     return result;
 }
 
-function applyStateUpdate(elder, key, payload) {
-    switch (key) {
-        case 'profile':
-            elder.profile = serialize(payload);
-            elder.guardianContacts = reconcileGuardianContacts(elder.profile, elder.guardianContacts);
-            return;
-        case 'memory-anchors':
-            elder.memoryAnchors = toLimitedArray(payload, MAX_RECENT_ITEMS);
-            return;
-        case 'medications':
-            elder.medications = toLimitedArray(payload, MAX_RECENT_ITEMS);
-            return;
-        case 'medication-logs':
-            elder.medicationLogs = toLimitedArray(payload, MAX_EVENTS);
-            return;
-        case 'health':
-            elder.health = {
-                metrics: payload?.metrics || null,
-                alerts: toLimitedArray(payload?.alerts || [], 40),
-            };
-            return;
-        case 'cognitive':
-            elder.cognitive = {
-                conversations: toLimitedArray(Array.isArray(payload) ? payload : payload?.conversations || [], MAX_EVENTS),
-                assessments: toLimitedArray(payload?.assessments || elder.cognitive.assessments || [], MAX_EVENTS),
-            };
-            return;
-        case 'care-plan':
-            elder.carePlan = {
-                items: toLimitedArray(payload?.items || [], MAX_RECENT_ITEMS),
-                events: toLimitedArray(payload?.events || [], MAX_EVENTS),
-                trend: payload?.trend || elder.carePlan?.trend || null,
-            };
-            return;
-        case 'location-automation':
-            if (payload?.state) elder.locationAutomation.state = serialize(payload.state);
-            if (payload?.event) elder.locationAutomation.events = prependLimited(elder.locationAutomation.events, payload.event, MAX_EVENTS);
-            return;
-        case 'wandering-config':
-            elder.wanderingConfig = {
-                homeLocation: payload?.homeLocation || null,
-                safeZones: toLimitedArray(payload?.safeZones || [], 20),
-            };
-            return;
-        case 'wandering':
-            elder.wandering.state = serialize(payload);
-            return;
-        case 'sundowning':
-            if (payload?.snapshot) elder.sundowning.snapshot = serialize(payload.snapshot);
-            if (payload?.alert) elder.sundowning.alerts = prependLimited(elder.sundowning.alerts, payload.alert, 60);
-            if (Object.prototype.hasOwnProperty.call(payload || {}, 'intervention')) {
-                elder.sundowning.interventions = prependLimited(elder.sundowning.interventions, payload.intervention, 60);
-            }
-            return;
-        default:
-            throw new Error(`Unsupported state section: ${key}`);
-    }
+async function queueElderAction(elderId, { action, payload = {}, purpose = 'family_control' }) {
+    const result = {
+        channel: 'frontend',
+        target: 'ui:elder-app',
+        stdout: 'Queued elder frontend action.',
+        stderr: '',
+    };
+
+    await dataClient.updateSection(elderId, 'uiCommands', {
+        op: 'prepend',
+        item: normalizeUiCommand({
+            type: 'elder.action',
+            payload: {
+                action,
+                ...payload,
+            },
+        }),
+    });
+
+    await recordOutbound(elderId, {
+        audience: 'elder',
+        channel: 'frontend',
+        targets: [result.target],
+        message: JSON.stringify({ action, payload }),
+        purpose,
+        metadata: { action, ...payload },
+        results: [result],
+    });
+
+    return result;
 }
 
-function ingestEvent(elder, event) {
-    elder.events = prependLimited(elder.events, event, MAX_EVENTS);
-
-    if (event.type.startsWith('medication.')) {
-        elder.medicationEvents = prependLimited(elder.medicationEvents, event, MAX_EVENTS);
-        if (event.type === 'medication.reminder' || event.type === 'medication.snooze') {
-            elder.activeReminder = event.payload.reminder || null;
-        }
-        if (event.type === 'medication.taken') {
-            elder.activeReminder = null;
-        }
-    }
-
-    if (event.type.startsWith('wandering.')) {
-        elder.wandering.events = prependLimited(elder.wandering.events, event, MAX_EVENTS);
-        if (event.payload?.state) {
-            elder.wandering.state = serialize(event.payload.state);
-        }
-    }
-
-    if (event.type === 'cognitive.conversation') {
-        elder.cognitive.conversations = prependLimited(elder.cognitive.conversations, event.payload, MAX_EVENTS);
-    }
-
-    if (event.type === 'cognitive.assessment') {
-        elder.cognitive.assessments = prependLimited(elder.cognitive.assessments || [], event.payload, MAX_EVENTS);
-    }
-
-    if (event.type.startsWith('care.')) {
-        elder.carePlan.events = prependLimited(elder.carePlan.events, event.payload ? { ...event.payload, eventType: event.type } : event, MAX_EVENTS);
-    }
-
-    if (event.type.startsWith('face.')) {
-        elder.faceEvents = prependLimited(elder.faceEvents || [], event.payload ? { ...event.payload, eventType: event.type } : event, MAX_EVENTS);
-    }
-
-    if (event.type.startsWith('location.')) {
-        elder.locationAutomation.events = prependLimited(elder.locationAutomation.events, event.payload ? { ...event.payload, eventType: event.type } : event, MAX_EVENTS);
-    }
-
-    if (event.type === 'memory.anchor_triggered') {
-        elder.memoryEvents = prependLimited(elder.memoryEvents || [], event, MAX_EVENTS);
-    }
-
-    if (event.type === 'sundowning.alert' && event.payload) {
-        elder.sundowning.alerts = prependLimited(elder.sundowning.alerts, event.payload, 60);
-    }
-}
+// ─── Context Builders (pure functions, unchanged) ───────────────────────────
 
 function buildContext(type, elder) {
     switch (type) {
@@ -776,6 +614,8 @@ function buildFamilyControlContext(elder) {
     };
 }
 
+// ─── Medication / Care Helpers ──────────────────────────────────────────────
+
 function computeDueMedicationItems(elder, now) {
     const currentTime = formatLocalTime(now);
     const today = formatLocalDate(now);
@@ -838,9 +678,7 @@ function computeMedicationAdherence(elder, days) {
     return Math.round((taken / relevantLogs.length) * 100);
 }
 
-function deriveGuardianContacts(profile) {
-    return reconcileGuardianContacts(profile, []);
-}
+// ─── Guardian Contact Resolution ────────────────────────────────────────────
 
 function reconcileGuardianContacts(profile, existingContacts = []) {
     if (!profile?.familyMembers) return [];
@@ -874,6 +712,8 @@ function reconcileGuardianContacts(profile, existingContacts = []) {
         }));
 }
 
+// ─── OpenClaw Event Forwarding ──────────────────────────────────────────────
+
 async function maybeForwardEvent(event, elderId, elder) {
     if (!OPENCLAW_GATEWAY_URL) return;
     if (!shouldForwardEvent(event)) return;
@@ -884,7 +724,8 @@ async function maybeForwardEvent(event, elderId, elder) {
     }
 
     const hookUrl = `${OPENCLAW_GATEWAY_URL}/hooks/agent`;
-    const message = buildWakeMessage(event, elderId, elder);
+    const nickname = elder.profile?.nickname || elder.profile?.name || elderId;
+    const message = buildWakeMessage(event, elderId, nickname);
     const body = {
         agentId: OPENCLAW_AGENT_ID || undefined,
         deliver: false,
@@ -913,8 +754,7 @@ function shouldForwardEvent(event) {
     return false;
 }
 
-function buildWakeMessage(event, elderId, elder) {
-    const nickname = elder.profile?.nickname || elder.profile?.name || elderId;
+function buildWakeMessage(event, elderId, nickname) {
     switch (event.type) {
         case 'wandering.wandering_start':
         case 'wandering.left_safe_zone':
@@ -971,6 +811,8 @@ function getForwardThrottle(event) {
     }
 }
 
+// ─── OpenClaw CLI Messaging ─────────────────────────────────────────────────
+
 async function sendMessage({ channel, target, message }) {
     const args = ['message', 'send', '--channel', channel, '--target', target, '--message', message];
     const { stdout, stderr } = await execFile(OPENCLAW_CLI, args, {
@@ -998,27 +840,7 @@ async function placeVoiceCall({ to, message, mode = 'notify' }) {
     };
 }
 
-function recordOutbound(elderId, outbound) {
-    updateState((state) => {
-        const elder = getElderState(state, elderId);
-        elder.outboundEvents = prependLimited(elder.outboundEvents, {
-            ...outbound,
-            timestamp: new Date().toISOString(),
-        }, MAX_OUTBOUND_EVENTS);
-        elder.uiCommands = prependLimited(elder.uiCommands || [], normalizeUiCommand({
-            type: 'outbound.recorded',
-            payload: {
-                audience: outbound.audience,
-                channel: outbound.channel,
-                targets: outbound.targets,
-                purpose: outbound.purpose,
-                message: outbound.message,
-            },
-        }), MAX_UI_COMMANDS);
-        state.updatedAt = new Date().toISOString();
-        return { state, elder };
-    });
-}
+// ─── Throttle / Outbound Helpers ────────────────────────────────────────────
 
 function shouldThrottleRecentKey(map, key, throttleMs) {
     if (!key || throttleMs <= 0) return false;
@@ -1124,50 +946,6 @@ function shouldSkipGuardianNotification(elder, { purpose, metadata = {} }) {
     };
 }
 
-function queueElderMessage(elderId, { message, purpose = 'general', metadata = {} }) {
-    if (shouldRouteToGuardiansInstead(message, purpose, metadata)) {
-        return {
-            channel: 'frontend',
-            target: 'ui:elder-app',
-            stdout: 'Skipped elderly frontend delivery because the message is guardian-facing.',
-            stderr: '',
-        };
-    }
-
-    const result = {
-        channel: 'frontend',
-        target: 'ui:elder-app',
-        stdout: 'Queued for elderly frontend delivery.',
-        stderr: '',
-    };
-
-    updateState((state) => {
-        const elder = getElderState(state, elderId);
-        elder.uiCommands = prependLimited(elder.uiCommands || [], normalizeUiCommand({
-            type: 'elder.message',
-            payload: {
-                message,
-                purpose,
-                metadata,
-            },
-        }), MAX_UI_COMMANDS);
-        state.updatedAt = new Date().toISOString();
-        return { state, elder };
-    });
-
-    recordOutbound(elderId, {
-        audience: 'elder',
-        channel: 'frontend',
-        targets: [result.target],
-        message,
-        purpose,
-        metadata,
-        results: [result],
-    });
-
-    return result;
-}
-
 function shouldRouteToGuardiansInstead(message, purpose = 'general', metadata = {}) {
     const text = String(message || '').trim();
     const normalizedPurpose = String(purpose || '').trim().toLowerCase();
@@ -1181,55 +959,7 @@ function shouldRouteToGuardiansInstead(message, purpose = 'general', metadata = 
     return false;
 }
 
-function queueElderAction(elderId, { action, payload = {}, purpose = 'family_control' }) {
-    const result = {
-        channel: 'frontend',
-        target: 'ui:elder-app',
-        stdout: 'Queued elder frontend action.',
-        stderr: '',
-    };
-
-    updateState((state) => {
-        const elder = getElderState(state, elderId);
-        elder.uiCommands = prependLimited(elder.uiCommands || [], normalizeUiCommand({
-            type: 'elder.action',
-            payload: {
-                action,
-                ...payload,
-            },
-        }), MAX_UI_COMMANDS);
-        state.updatedAt = new Date().toISOString();
-        return { state, elder };
-    });
-
-    recordOutbound(elderId, {
-        audience: 'elder',
-        channel: 'frontend',
-        targets: [result.target],
-        message: JSON.stringify({ action, payload }),
-        purpose,
-        metadata: { action, ...payload },
-        results: [result],
-    });
-
-    return result;
-}
-
-function normalizeUiCommand(input) {
-    const now = Date.now();
-    const cmd = serialize(input || {});
-    const timestamp = typeof cmd.timestamp === 'number'
-        ? cmd.timestamp
-        : cmd.timestamp
-            ? new Date(cmd.timestamp).getTime()
-            : now;
-    return {
-        id: cmd.id || `ui_${now}_${Math.random().toString(36).slice(2, 8)}`,
-        type: cmd.type || 'unknown',
-        timestamp: Number.isFinite(timestamp) ? timestamp : now,
-        payload: cmd.payload || {},
-    };
-}
+// ─── Guardian / Elder Target Resolution ─────────────────────────────────────
 
 function resolveGuardianTargets(elder, explicitTargets, channel) {
     const contacts = getEffectiveGuardianContacts(elder);
@@ -1362,6 +1092,8 @@ function filterOutboundByPurpose(elder, purposes) {
     return elder.outboundEvents.filter((event) => purposes.includes(event.purpose));
 }
 
+// ─── Event / UI Command Normalization ───────────────────────────────────────
+
 function normalizeEvent(body) {
     return {
         type: body.type,
@@ -1370,6 +1102,24 @@ function normalizeEvent(body) {
         payload: serialize(body.payload || {}),
     };
 }
+
+function normalizeUiCommand(input) {
+    const now = Date.now();
+    const cmd = serialize(input || {});
+    const timestamp = typeof cmd.timestamp === 'number'
+        ? cmd.timestamp
+        : cmd.timestamp
+            ? new Date(cmd.timestamp).getTime()
+            : now;
+    return {
+        id: cmd.id || `ui_${now}_${Math.random().toString(36).slice(2, 8)}`,
+        type: cmd.type || 'unknown',
+        timestamp: Number.isFinite(timestamp) ? timestamp : now,
+        payload: cmd.payload || {},
+    };
+}
+
+// ─── Generic Helpers ────────────────────────────────────────────────────────
 
 function distanceMeters(a, b) {
     const R = 6371000;
@@ -1402,15 +1152,6 @@ function diffMinutes(start, end) {
     const [h1, m1] = start.split(':').map(Number);
     const [h2, m2] = end.split(':').map(Number);
     return Math.max(0, (h2 * 60 + m2) - (h1 * 60 + m1));
-}
-
-function toLimitedArray(value, limit) {
-    return (Array.isArray(value) ? value : []).slice(-limit);
-}
-
-function prependLimited(list, value, limit) {
-    if (value == null) return list.slice(0, limit);
-    return [serialize(value), ...list].slice(0, limit);
 }
 
 function serialize(value) {
