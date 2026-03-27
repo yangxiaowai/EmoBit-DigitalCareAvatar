@@ -116,7 +116,7 @@
       "memoryText": "还记得1995年那次表彰吗？您那时候可是单位的骨干呢！",
       "voiceText": "爸，这是您以前工作的地方，还记得1995年那次表彰吗？",
       "category": "work",
-      "createdAt": "2026-03-23T06:13:21.128Z"
+      "createdAt": "2026-03-27T13:10:05.254Z"
     },
     {
       "id": "demo_park",
@@ -129,7 +129,7 @@
       "memoryText": "小时候您常带我来这里喂鸽子，我还记得那个卖糖葫芦的老奶奶。",
       "voiceText": "爸，这是我们小时候常来的公园，还记得那个卖糖葫芦的老奶奶吗？",
       "category": "family",
-      "createdAt": "2026-03-23T06:13:21.128Z"
+      "createdAt": "2026-03-27T13:10:05.254Z"
     },
     {
       "id": "demo_home",
@@ -142,7 +142,7 @@
       "memoryText": "欢迎回家！今天累了吧，进屋喝杯热茶。",
       "voiceText": "爸，快到家啦！我给您沏好茶了。",
       "category": "daily",
-      "createdAt": "2026-03-23T06:13:21.128Z"
+      "createdAt": "2026-03-27T13:10:05.254Z"
     }
   ],
   "memoryEvents": [],
@@ -164,10 +164,10 @@
     "state": {
       "isWandering": false,
       "wanderingType": "none",
-      "confidence": 0.85,
+      "confidence": 0,
       "duration": 0,
-      "distanceFromHome": 1500,
-      "outsideSafeZone": true
+      "distanceFromHome": 0,
+      "outsideSafeZone": false
     },
     "events": [
       {
@@ -378,7 +378,15 @@
   "activeReminder": null,
   "health": {
     "metrics": {
-      "heartRate": 75
+      "heartRate": 72,
+      "bloodOxygen": 98,
+      "sleepHours": 7.5,
+      "steps": 5200,
+      "bloodPressure": {
+        "systolic": 118,
+        "diastolic": 76
+      },
+      "temperature": 36.5
     },
     "alerts": []
   },
@@ -1463,15 +1471,15 @@
   },
   "sundowning": {
     "snapshot": {
-      "timestamp": 1774251166696,
-      "riskScore": 35,
+      "timestamp": 1774617797317,
+      "riskScore": 27,
       "riskLevel": "low",
       "trend": "stable",
-      "timeWindowWeight": 8,
+      "timeWindowWeight": 0,
       "behaviorSummary": {
         "confusionScore": 25,
         "repeatedQuestions": 0,
-        "stepAnomalyScore": 29,
+        "stepAnomalyScore": 28,
         "agitationScore": 25
       },
       "keyFactors": [
@@ -10202,12 +10210,53 @@
         "createdBy": "system",
         "instructions": "睡前可以做两分钟呼吸放松",
         "createdAt": "2026-03-18T13:20:27.804Z",
-        "updatedAt": "2026-03-18T13:20:27.804Z",
+        "updatedAt": "2026-03-27T13:00:04.968Z",
         "lastCompletedAt": null,
-        "lastTriggeredAt": null
+        "lastTriggeredAt": "2026-03-27T13:00:04.968Z"
       }
     ],
     "events": [
+      {
+        "id": "care_evt_1774616404970_d6f2",
+        "type": "reminder_triggered",
+        "itemId": "care_default_sleep",
+        "item": {
+          "id": "care_default_sleep",
+          "type": "sleep",
+          "title": "晚间休息提醒",
+          "time": "21:00",
+          "recurrence": "daily",
+          "enabled": true,
+          "createdBy": "system",
+          "instructions": "睡前可以做两分钟呼吸放松",
+          "createdAt": "2026-03-18T13:20:27.804Z",
+          "updatedAt": "2026-03-27T13:00:04.968Z",
+          "lastCompletedAt": null,
+          "lastTriggeredAt": "2026-03-27T13:00:04.968Z"
+        },
+        "timestamp": "2026-03-27T13:00:04.970Z",
+        "note": "scheduled"
+      },
+      {
+        "id": "care_evt_1774616404968_v23s",
+        "type": "updated",
+        "itemId": "care_default_sleep",
+        "item": {
+          "id": "care_default_sleep",
+          "type": "sleep",
+          "title": "晚间休息提醒",
+          "time": "21:00",
+          "recurrence": "daily",
+          "enabled": true,
+          "createdBy": "system",
+          "instructions": "睡前可以做两分钟呼吸放松",
+          "createdAt": "2026-03-18T13:20:27.804Z",
+          "updatedAt": "2026-03-27T13:00:04.968Z",
+          "lastCompletedAt": null,
+          "lastTriggeredAt": "2026-03-27T13:00:04.968Z"
+        },
+        "timestamp": "2026-03-27T13:00:04.968Z"
+      },
       {
         "id": "care_evt_1774249241888_8g5p",
         "type": "reminder_triggered",
@@ -10387,7 +10436,7 @@
   },
   "faceEvents": [],
   "version": 1,
-  "updatedAt": "2026-03-26T16:30:53.045Z",
+  "updatedAt": "2026-03-27T13:23:17.414Z",
   "faces": [],
   "timeAlbum": [],
   "outbound": [

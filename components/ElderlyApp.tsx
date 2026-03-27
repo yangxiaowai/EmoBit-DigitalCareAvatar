@@ -1933,30 +1933,74 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
         }
 
         if (action === 'start_breathing') {
+            const line = speech || '张爷爷，我们一起做一个呼吸放松练习，慢慢吸气，再慢慢呼气。';
             setShowBreathingGuide(true);
             setBreathingGuideIndex(0);
-            setAiMessage(speech || '我们一起做一个呼吸放松练习。');
+            setAiMessage(line);
             setIsTalking(true);
-            VoiceService.speak(speech || '我们一起做一个呼吸放松练习。', undefined, undefined, () => {
+            VoiceService.speak(line, undefined, undefined, () => {
                 setIsTalking(false);
             }).catch(() => setIsTalking(false));
             return;
         }
 
         if (action === 'show_medication') {
-            setAiMessage(speech || '我来带您看看今天的用药安排。');
+            const line = speech || '张爷爷，我来带您看看今天的用药安排，按时吃药身体会更稳一点。';
+            setAiMessage(line);
             setActiveScenario('meds');
             setIsTalking(true);
-            VoiceService.speak(speech || '我来带您看看今天的用药安排。', undefined, undefined, () => {
+            VoiceService.speak(line, undefined, undefined, () => {
                 setIsTalking(false);
             }).catch(() => setIsTalking(false));
             return;
         }
 
         if (action === 'show_care_plan') {
-            setAiMessage(speech || '我来播报今天的提醒安排。');
+            const line = speech || '张爷爷，我帮您过一遍今天的照护安排，有什么不舒服也可以随时跟我说。';
+            setAiMessage(line);
             setIsTalking(true);
-            VoiceService.speak(speech || '我来播报今天的提醒安排。', undefined, undefined, () => {
+            VoiceService.speak(line, undefined, undefined, () => {
+                setIsTalking(false);
+            }).catch(() => setIsTalking(false));
+            return;
+        }
+
+        // 主动关怀：早安/午间/晚间/睡前关心 —— 不需要家属说话，由数字人先开口
+        if (action === 'proactive_morning_check') {
+            const line = speech || '早上好张爷爷，我已经帮您检查了今天的天气和用药安排，早餐吃得还好吗？一会儿记得按时吃药，我会提醒您的。';
+            setAiMessage(line);
+            setIsTalking(true);
+            VoiceService.speak(line, undefined, undefined, () => {
+                setIsTalking(false);
+            }).catch(() => setIsTalking(false));
+            return;
+        }
+
+        if (action === 'proactive_noon_check') {
+            const line = speech || '张爷爷，中午好，我来陪您聊一会儿。午饭吃得怎么样？如果有想去的地方或者想联系的家人，可以跟我说。';
+            setAiMessage(line);
+            setIsTalking(true);
+            VoiceService.speak(line, undefined, undefined, () => {
+                setIsTalking(false);
+            }).catch(() => setIsTalking(false));
+            return;
+        }
+
+        if (action === 'proactive_evening_check') {
+            const line = speech || '张爷爷，晚上好，我来看看您今天的状态。今天走路有没有累到？晚上的药我会再提醒您，睡前我们可以简单回顾一下今天的事情。';
+            setAiMessage(line);
+            setIsTalking(true);
+            VoiceService.speak(line, undefined, undefined, () => {
+                setIsTalking(false);
+            }).catch(() => setIsTalking(false));
+            return;
+        }
+
+        if (action === 'proactive_sleep_check') {
+            const line = speech || '张爷爷，现在已经不早了，我来陪您做几个深呼吸，然后慢慢准备休息。有什么担心的事情也可以跟我说，我会帮您记下来提醒家人。';
+            setAiMessage(line);
+            setIsTalking(true);
+            VoiceService.speak(line, undefined, undefined, () => {
                 setIsTalking(false);
             }).catch(() => setIsTalking(false));
             return;
@@ -2581,6 +2625,50 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
                                 >
                                     启动呼吸放松
                                 </button>
+                            </div>
+                            <div className="mt-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-2.5 py-2">
+                                <p className="text-[10px] font-bold text-slate-700 mb-1">数字人 24 小时主动关怀</p>
+                                <p className="text-[10px] text-slate-500 mb-2">
+                                    通过固定话术按钮，模拟数字人在早晨、中午、晚上和睡前主动发起家居陪伴与状态关心。
+                                </p>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => executeFamilyControlAction('proactive_morning_check', {
+                                            text: '早上好张爷爷，我已经帮您检查了今天的天气和用药安排，早餐吃得还好吗？一会儿记得按时吃药，我会提醒您的。',
+                                        })}
+                                        className="rounded-xl bg-sky-500 px-2 py-2 text-left text-[10px] font-bold text-white shadow-sm active:scale-[0.98] transition-transform"
+                                    >
+                                        ☀️ 早安关怀
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => executeFamilyControlAction('proactive_noon_check', {
+                                            text: '张爷爷，中午好，我来陪您聊一会儿。午饭吃得怎么样？如果有想去的地方或者想联系的家人，可以跟我说。',
+                                        })}
+                                        className="rounded-xl bg-emerald-500 px-2 py-2 text-left text-[10px] font-bold text-white shadow-sm active:scale-[0.98] transition-transform"
+                                    >
+                                        🍚 午间问候
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => executeFamilyControlAction('proactive_evening_check', {
+                                            text: '张爷爷，晚上好，我来看看您今天的状态。今天走路有没有累到？晚上的药我会再提醒您，睡前我们可以简单回顾一下今天的事情。',
+                                        })}
+                                        className="rounded-xl bg-indigo-500 px-2 py-2 text-left text-[10px] font-bold text-white shadow-sm active:scale-[0.98] transition-transform"
+                                    >
+                                        🌆 晚间关心
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => executeFamilyControlAction('proactive_sleep_check', {
+                                            text: '张爷爷，现在已经不早了，我来陪您做几个深呼吸，然后慢慢准备休息。有什么担心的事情也可以跟我说，我会帮您记下来提醒家人。',
+                                        })}
+                                        className="rounded-xl bg-slate-700 px-2 py-2 text-left text-[10px] font-bold text-white shadow-sm active:scale-[0.98] transition-transform"
+                                    >
+                                        🌙 睡前陪伴
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

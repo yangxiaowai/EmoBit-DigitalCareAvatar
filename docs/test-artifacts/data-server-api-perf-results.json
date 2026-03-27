@@ -1,0 +1,109 @@
+{
+  "startedAt": "2026-03-27T13:00:07.689Z",
+  "environment": {
+    "node": "v23.11.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "baseUrl": "http://127.0.0.1:56852"
+  },
+  "apiTests": [
+    {
+      "name": "GET /healthz",
+      "expected": "返回 200，ok=true",
+      "actual": {
+        "status": 200,
+        "ok": true,
+        "durationMs": 25.91
+      },
+      "passed": true
+    },
+    {
+      "name": "GET /api/elder?elderId=elder_demo",
+      "expected": "返回 200，返回默认老人画像",
+      "actual": {
+        "status": 200,
+        "profileName": "张爷爷",
+        "durationMs": 9.77
+      },
+      "passed": true
+    },
+    {
+      "name": "POST /api/elder/state/health",
+      "expected": "返回 200，心率更新为 79",
+      "actual": {
+        "status": 200,
+        "heartRate": 79,
+        "durationMs": 17.86
+      },
+      "passed": true
+    },
+    {
+      "name": "POST /api/elder/events",
+      "expected": "返回 200，新增跌倒事件",
+      "actual": {
+        "status": 200,
+        "eventType": "simulation.fall",
+        "durationMs": 34.94
+      },
+      "passed": true
+    },
+    {
+      "name": "POST /api/media/upload + GET /media/*",
+      "expected": "上传成功并可回读，content-type=image/png",
+      "actual": {
+        "uploadStatus": 200,
+        "readStatus": 200,
+        "contentType": "image/png",
+        "bodyBytes": 68,
+        "uploadDurationMs": 5.69,
+        "readDurationMs": 2.34
+      },
+      "passed": true
+    },
+    {
+      "name": "POST /api/elder/state/unknown",
+      "expected": "返回 400，提示 Unsupported state section",
+      "actual": {
+        "status": 400,
+        "error": "Unsupported state section: unknown",
+        "durationMs": 3.91
+      },
+      "passed": true
+    }
+  ],
+  "loadTests": [
+    {
+      "name": "GET /healthz 压力测试",
+      "totalRequests": 200,
+      "concurrency": 20,
+      "elapsedMs": 157.57,
+      "successCount": 200,
+      "failureCount": 0,
+      "successRate": 100,
+      "avgMs": 14.89,
+      "p95Ms": 52.94,
+      "maxMs": 82.05,
+      "minMs": 4.46,
+      "throughputRps": 1269.28
+    },
+    {
+      "name": "POST /api/elder/events 并发压力测试",
+      "totalRequests": 100,
+      "concurrency": 10,
+      "elapsedMs": 190.81,
+      "successCount": 100,
+      "failureCount": 0,
+      "successRate": 100,
+      "avgMs": 18.32,
+      "p95Ms": 26.57,
+      "maxMs": 29.63,
+      "minMs": 4.92,
+      "throughputRps": 524.08,
+      "dataIntegrity": {
+        "expectedEventCount": 100,
+        "actualEventCount": 100,
+        "passed": true
+      }
+    }
+  ]
+}
