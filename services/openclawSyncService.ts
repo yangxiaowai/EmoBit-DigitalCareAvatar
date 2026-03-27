@@ -12,6 +12,7 @@ import type {
     SundowningPushAlert,
     SundowningRiskSnapshot,
 } from './sundowningService';
+import { getOpenClawBridgeBaseUrl } from '../utils/runtimeConfig';
 
 interface SyncEnvelope<T> {
     elderId: string;
@@ -76,8 +77,7 @@ export class OpenClawSyncService {
     private lastPayloadByKey = new Map<string, { ts: number; signature: string }>();
 
     constructor(options?: OpenClawSyncServiceOptions) {
-        const baseUrl = (options?.baseUrl ?? import.meta.env.VITE_OPENCLAW_BRIDGE_URL ?? '').replace(/\/$/, '');
-        this.baseUrl = baseUrl;
+        this.baseUrl = (options?.baseUrl ?? getOpenClawBridgeBaseUrl()).replace(/\/$/, '');
         this.token = options?.token ?? import.meta.env.VITE_OPENCLAW_BRIDGE_TOKEN ?? '';
         this.elderId = options?.elderId ?? import.meta.env.VITE_OPENCLAW_ELDER_ID ?? DEFAULT_ELDER_ID;
         this.enabled = options?.enabled ?? (import.meta.env.VITE_OPENCLAW_SYNC_ENABLED === 'true' && !!this.baseUrl);
@@ -89,6 +89,10 @@ export class OpenClawSyncService {
 
     getElderId(): string {
         return this.elderId;
+    }
+
+    getBaseUrl(): string {
+        return this.baseUrl;
     }
 
     /**

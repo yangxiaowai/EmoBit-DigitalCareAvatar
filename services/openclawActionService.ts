@@ -1,3 +1,5 @@
+import { getOpenClawBridgeBaseUrl } from '../utils/runtimeConfig';
+
 interface BridgeActionOptions {
   elderId?: string;
 }
@@ -30,7 +32,7 @@ export class OpenClawActionService {
   private elderId: string;
 
   constructor(options?: OpenClawActionServiceOptions) {
-    this.baseUrl = (options?.baseUrl ?? import.meta.env.VITE_OPENCLAW_BRIDGE_URL ?? '').replace(/\/$/, '');
+    this.baseUrl = (options?.baseUrl ?? getOpenClawBridgeBaseUrl()).replace(/\/$/, '');
     this.token = options?.token ?? import.meta.env.VITE_OPENCLAW_BRIDGE_TOKEN ?? '';
     this.elderId = options?.elderId ?? import.meta.env.VITE_OPENCLAW_ELDER_ID ?? DEFAULT_ELDER_ID;
   }

@@ -9,6 +9,7 @@ import { wanderingService } from './services/wanderingService';
 import { medicationService } from './services/medicationService';
 import { openclawSyncService } from './services/openclawSyncService';
 import { isGuardianOnlyBridgeMessage } from './utils/openclawMessageGuards';
+import { getOpenClawBridgeBaseUrl } from './utils/runtimeConfig';
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<'dashboard' | 'app'>('dashboard');
@@ -116,7 +117,7 @@ const App: React.FC = () => {
   // OpenClaw → UI：轮询 Bridge 的 uiCommands，把 OpenClaw 的决策/动作结果回写到界面
   useEffect(() => {
     const enabled = openclawSyncService.isEnabled();
-    const baseUrl = (import.meta.env.VITE_OPENCLAW_BRIDGE_URL || '').replace(/\/$/, '');
+    const baseUrl = (openclawSyncService.getBaseUrl?.() || getOpenClawBridgeBaseUrl()).replace(/\/$/, '');
     const elderId = openclawSyncService.getElderId();
     if (!enabled || !baseUrl) return;
     const initialSince = Date.now();

@@ -22,6 +22,7 @@ import {
 } from '../services/sundowningService';
 import { openclawSyncService } from '../services/openclawSyncService';
 import { openclawActionService } from '../services/openclawActionService';
+import { getOpenClawBridgeBaseUrl } from '../utils/runtimeConfig';
 import { ShieldCheck, MapPin, Heart, Pill, AlertTriangle, Phone, Activity, Clock, User, Calendar, LayoutGrid, FileText, Settings, ChevronRight, Eye, Brain, Layers, Play, Pause, SkipBack, SkipForward, History, AlertCircle, Signal, Wifi, Battery, Moon, Footprints, Sun, Cloud, ArrowLeft, Mic, Upload, Sparkles, CheckCircle, Volume2, ToggleRight, Loader2, ScanFace, Box, Wand2, Plus, X, Users, Camera, TrendingUp, BookOpen, MessageCircle, MessageSquare, Link2, ArrowUpRight } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, AreaChart, Area, BarChart, Bar, CartesianGrid } from 'recharts';
 import ReactMarkdown from 'react-markdown';
@@ -1601,7 +1602,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         }>({
             syncEnabled: openclawSyncService.isEnabled(),
             elderId: openclawSyncService.getElderId(),
-            bridgeBaseUrl: (import.meta.env.VITE_OPENCLAW_BRIDGE_URL || '').replace(/\/$/, ''),
+            bridgeBaseUrl: getOpenClawBridgeBaseUrl(),
             bridgeHealthy: undefined,
             gatewayConfigured: undefined,
             loading: false,
@@ -1629,7 +1630,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         useEffect(() => {
             const syncEnabled = openclawSyncService.isEnabled();
             const elderId = openclawSyncService.getElderId();
-            const bridgeBaseUrl = (import.meta.env.VITE_OPENCLAW_BRIDGE_URL || '').replace(/\/$/, '');
+            const bridgeBaseUrl = getOpenClawBridgeBaseUrl();
             setOpenclawStatus((prev) => ({
                 ...prev,
                 syncEnabled,
