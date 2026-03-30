@@ -9,6 +9,7 @@ describe('voice clone (functional)', () => {
   it('clones voice successfully with measurable latency', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-19T10:00:00.000Z'));
+    const preloadPhrases = vi.fn(async () => undefined);
 
     vi.doMock('../services/voiceCloneService', () => {
       return {
@@ -25,6 +26,7 @@ describe('voice clone (functional)', () => {
                 }, 80);
               }),
           ),
+          preloadPhrases,
           listVoices: vi.fn(async () => []),
         },
       };
@@ -43,7 +45,55 @@ describe('voice clone (functional)', () => {
     expect(profile.status).toBe('ready');
     expect(profile.isCloned).toBe(true);
     expect(profile.id.startsWith('cloned_')).toBe(true);
+    expect(preloadPhrases).toHaveBeenCalledTimes(1);
+    expect(preloadPhrases).toHaveBeenCalledWith(profile.id, expect.any(Array));
     vi.useRealTimers();
+  });
+
+  it('routes cloned voice playback through the clone service instead of Edge TTS', async () => {
+    const cloneSpeak = vi.fn(async (_text: string, _voiceId: string, _language?: string, onEnded?: () => void) => {
+      onEnded?.();
+    });
+    const edgeSpeak = vi.fn(async () => undefined);
+
+    vi.doMock('../services/voiceCloneService', () => {
+      return {
+        voiceCloneService: {
+          checkConnection: vi.fn(async () => true),
+          registerVoice: vi.fn(),
+          preloadPhrases: vi.fn(async () => undefined),
+          listVoices: vi.fn(async () => []),
+          speak: cloneSpeak,
+          stop: vi.fn(),
+          synthesize: vi.fn(),
+        },
+      };
+    });
+
+    vi.doMock('../services/ttsService', () => {
+      return {
+        edgeTTSService: {
+          speak: edgeSpeak,
+          synthesize: vi.fn(),
+          stop: vi.fn(),
+          preload: vi.fn(),
+          checkConnection: vi.fn(async () => true),
+        },
+      };
+    });
+
+    const { VoiceService } = await import('../services/api');
+    const onEnded = vi.fn();
+    await VoiceService.speak('你好，我是你的数字人助手', 'cloned_test_voice', undefined, onEnded);
+
+    expect(cloneSpeak).toHaveBeenCalledTimes(1);
+    expect(cloneSpeak).toHaveBeenCalledWith(
+      '你好，我是你的数字人助手',
+      'cloned_test_voice',
+      'zh',
+      onEnded,
+    );
+    expect(edgeSpeak).not.toHaveBeenCalled();
   });
 
   it('falls back safely when clone service unavailable', async () => {
@@ -71,4 +121,3 @@ describe('voice clone (functional)', () => {
     warnSpy.mockRestore();
   });
 });
-

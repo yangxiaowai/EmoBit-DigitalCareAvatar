@@ -414,18 +414,16 @@ class VoiceCloneService {
      * 预拉常用句并触发服务端缓存，不播放。后续相同 (text, voiceId) 合成可命中缓存近即时返回。
      */
     async preloadPhrases(voiceId: string, texts: string[]): Promise<void> {
-        await Promise.all(
-            texts.map(async (text) => {
-                try {
-                    const r = await this.synthesize(text, voiceId, 'zh');
-                    if (r.success && r.audioUrl) {
-                        URL.revokeObjectURL(r.audioUrl);
-                    }
-                } catch {
-                    /* ignore */
+        for (const text of texts) {
+            try {
+                const r = await this.synthesize(text, voiceId, 'zh');
+                if (r.success && r.audioUrl) {
+                    URL.revokeObjectURL(r.audioUrl);
                 }
-            })
-        );
+            } catch {
+                /* ignore */
+            }
+        }
     }
 
     /**

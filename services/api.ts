@@ -31,6 +31,18 @@ function getEffectiveVoice(voiceId: string | null | undefined): VoiceType {
   return opt ? opt.voiceKey : DEFAULT_TTS_VOICE;
 }
 
+function isClonedVoiceId(voiceId: string | null | undefined): voiceId is string {
+  return Boolean(voiceId && !voiceId.startsWith('edge_'));
+}
+
+function resolveVoiceTarget(voiceId?: string): { kind: 'clone'; voiceId: string } | { kind: 'edge'; voice: VoiceType } {
+  const selectedVoiceId = voiceId ?? voiceSelectionService.getSelectedVoiceId();
+  if (isClonedVoiceId(selectedVoiceId)) {
+    return { kind: 'clone', voiceId: selectedVoiceId };
+  }
+  return { kind: 'edge', voice: getEffectiveVoice(selectedVoiceId) };
+}
+
 // 配置：设置为 false 以启用真实 API 调用
 export const USE_MOCK_API = false;
 
@@ -45,6 +57,13 @@ const COMMON_TTS_PHRASES = [
   '好的，让我们一起看看老照片吧~',
   '不客气，能帮到您是我的荣幸！',
   '抱歉，我没太听清楚，您能再说一遍吗？',
+];
+
+/** 语音克隆高频短句预热集合：命中缓存后可显著缩短重复播报等待时间 */
+const COMMON_CLONE_PHRASES = [
+  '你好，我是你的数字人助手',
+  '好的，我来帮您看看药。',
+  '晚上好，请按时休息。',
 ];
 
 // --- Voice Service (主 TTS: Edge TTS，默认孙女声；可选语音克隆) ---
@@ -73,6 +92,11 @@ export const VoiceService = {
         voiceId,
         name || '克隆声音'
       );
+
+      // 注册完成后立即异步预热高频短句，后续同音色/同文本请求可直接命中缓存。
+      void voiceCloneService.preloadPhrases(voiceId, COMMON_CLONE_PHRASES).catch((error) => {
+        console.warn('[VoiceService] 语音克隆短句预热失败:', error);
+      });
 
       console.log('[VoiceService] cloneVoice: 完成', config);
       return {
@@ -119,9 +143,15 @@ export const VoiceService = {
       return 'mock_audio_url.mp3';
     }
 
-    const voice = getEffectiveVoice(voiceId ?? voiceSelectionService.getSelectedVoiceId());
+    const target = resolveVoiceTarget(voiceId);
     try {
-      const result = await edgeTTSService.synthesize(text, voice);
+      if (target.kind === 'clone') {
+        const result = await voiceCloneService.synthesize(text, target.voiceId, 'zh');
+        if (result.success && result.audioUrl) return result.audioUrl;
+        throw new Error(result.error || '语音克隆合成失败');
+      }
+
+      const result = await edgeTTSService.synthesize(text, target.voice);
       if (result.success && result.audioUrl) return result.audioUrl;
       throw new Error(result.error || '语音合成失败');
     } catch (error) {
@@ -172,10 +202,16 @@ export const VoiceService = {
       });
     }
 
-    const voice = getEffectiveVoice(voiceId ?? voiceSelectionService.getSelectedVoiceId());
+    const target = resolveVoiceTarget(voiceId);
     try {
-      console.log(`[VoiceService] 播放语音: "${text}" (Edge TTS: ${voice})`);
-      await edgeTTSService.speak(text, voice, onEnded);
+      if (target.kind === 'clone') {
+        console.log(`[VoiceService] 播放语音: "${text}" (Clone Voice: ${target.voiceId})`);
+        await voiceCloneService.speak(text, target.voiceId, 'zh', onEnded);
+        return;
+      }
+
+      console.log(`[VoiceService] 播放语音: "${text}" (Edge TTS: ${target.voice})`);
+      await edgeTTSService.speak(text, target.voice, onEnded);
     } catch (error) {
       console.error('[VoiceService] ❌ 播放语音失败:', error);
       onEnded?.();
@@ -187,6 +223,7 @@ export const VoiceService = {
       window.speechSynthesis.cancel();
       return;
     }
+    voiceCloneService.stop();
     edgeTTSService.stop();
   },
 
@@ -227,12 +264,15 @@ export const VoiceService = {
   },
 
   /**
-   * 预拉 Edge TTS 常用句，命中缓存可近即时播放。进入老人端等时可调用。
-   * 使用当前选中的 Edge 音色预拉。
+   * 预拉当前选中音色的高频短句。Edge TTS 命中本地缓存，克隆音色命中服务端缓存。
    */
   preloadClonePhrases: (voiceId?: string): void => {
-    const voice = getEffectiveVoice(voiceId ?? voiceSelectionService.getSelectedVoiceId());
-    edgeTTSService.preload(COMMON_TTS_PHRASES, voice).catch(() => { });
+    const target = resolveVoiceTarget(voiceId);
+    if (target.kind === 'clone') {
+      void voiceCloneService.preloadPhrases(target.voiceId, COMMON_CLONE_PHRASES).catch(() => { });
+      return;
+    }
+    edgeTTSService.preload(COMMON_TTS_PHRASES, target.voice).catch(() => { });
   },
 
   /**

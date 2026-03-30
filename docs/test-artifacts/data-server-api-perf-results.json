@@ -1,10 +1,10 @@
 {
-  "startedAt": "2026-03-27T13:00:07.689Z",
+  "startedAt": "2026-03-29T10:07:05.027Z",
   "environment": {
     "node": "v23.11.0",
     "platform": "darwin",
     "arch": "arm64",
-    "baseUrl": "http://127.0.0.1:56852"
+    "baseUrl": "http://127.0.0.1:57939"
   },
   "apiTests": [
     {
@@ -13,7 +13,7 @@
       "actual": {
         "status": 200,
         "ok": true,
-        "durationMs": 25.91
+        "durationMs": 10.91
       },
       "passed": true
     },
@@ -23,7 +23,7 @@
       "actual": {
         "status": 200,
         "profileName": "张爷爷",
-        "durationMs": 9.77
+        "durationMs": 3.2
       },
       "passed": true
     },
@@ -33,7 +33,7 @@
       "actual": {
         "status": 200,
         "heartRate": 79,
-        "durationMs": 17.86
+        "durationMs": 5.44
       },
       "passed": true
     },
@@ -43,7 +43,7 @@
       "actual": {
         "status": 200,
         "eventType": "simulation.fall",
-        "durationMs": 34.94
+        "durationMs": 3.36
       },
       "passed": true
     },
@@ -55,8 +55,8 @@
         "readStatus": 200,
         "contentType": "image/png",
         "bodyBytes": 68,
-        "uploadDurationMs": 5.69,
-        "readDurationMs": 2.34
+        "uploadDurationMs": 3.2,
+        "readDurationMs": 1.07
       },
       "passed": true
     },
@@ -66,7 +66,7 @@
       "actual": {
         "status": 400,
         "error": "Unsupported state section: unknown",
-        "durationMs": 3.91
+        "durationMs": 4.18
       },
       "passed": true
     }
@@ -76,29 +76,29 @@
       "name": "GET /healthz 压力测试",
       "totalRequests": 200,
       "concurrency": 20,
-      "elapsedMs": 157.57,
+      "elapsedMs": 68.52,
       "successCount": 200,
       "failureCount": 0,
       "successRate": 100,
-      "avgMs": 14.89,
-      "p95Ms": 52.94,
-      "maxMs": 82.05,
-      "minMs": 4.46,
-      "throughputRps": 1269.28
+      "avgMs": 6.4,
+      "p95Ms": 11.71,
+      "maxMs": 21.23,
+      "minMs": 3.44,
+      "throughputRps": 2918.86
     },
     {
       "name": "POST /api/elder/events 并发压力测试",
       "totalRequests": 100,
       "concurrency": 10,
-      "elapsedMs": 190.81,
+      "elapsedMs": 104.58,
       "successCount": 100,
       "failureCount": 0,
       "successRate": 100,
-      "avgMs": 18.32,
-      "p95Ms": 26.57,
-      "maxMs": 29.63,
-      "minMs": 4.92,
-      "throughputRps": 524.08,
+      "avgMs": 9.87,
+      "p95Ms": 13.16,
+      "maxMs": 13.75,
+      "minMs": 5.85,
+      "throughputRps": 956.21,
       "dataIntegrity": {
         "expectedEventCount": 100,
         "actualEventCount": 100,

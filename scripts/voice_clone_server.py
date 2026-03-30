@@ -32,6 +32,8 @@ from typing import Optional
 # 合成结果缓存 (key: sha256(text|voice_id), value: wav_bytes)，避免重复短语重复推理
 TTS_CACHE_MAX = int(os.environ.get("VOICE_CLONE_CACHE_SIZE", "50"))
 _tts_cache: OrderedDict[str, bytes] = OrderedDict()
+# 进行中的相同合成任务去重：避免预热与前台请求/重复请求对同一短语重复推理
+_tts_inflight: dict[str, asyncio.Task[bytes]] = {}
 
 try:
     import websockets
@@ -120,12 +122,8 @@ _inference_lock: Optional[asyncio.Lock] = None
 # 常用句列表（与服务端预生成一致）
 COMMON_PHRASES = [
     "你好，我是你的数字人助手",
-    "今天天气不错，24度晴朗。出门记得戴帽子防晒哦~",
-    "好的，我来帮您导航。",
     "好的，我来帮您看看药。",
-    "好的，让我们一起看看老照片吧~",
-    "不客气，能帮到您是我的荣幸！",
-    "抱歉，我没太听清楚，您能再说一遍吗？",
+    "晚上好，请按时休息。",
 ]
 
 
@@ -189,23 +187,15 @@ def get_registered_voice_ids() -> list[str]:
     return voice_ids
 
 
-async def auto_preload_common_phrases():
-    """模型加载完成后，自动为已注册的克隆音色预生成常用句（后台异步，低优先级，不阻塞用户请求）"""
+async def auto_preload_common_phrases_for_voice(target_voice_id: str):
+    """为指定音色预生成常用句（后台异步，低优先级，不阻塞用户请求）"""
     global _active_user_requests
-    
+
     if not _model_ready or tts_model is None:
         return
-    
-    voice_ids = get_registered_voice_ids()
-    if not voice_ids:
-        logger.info("[预加载] 暂无已注册的克隆音色，跳过自动预加载")
-        return
-    
-    # 只预加载第一个音色（通常是当前使用的），避免资源竞争
-    # 其他音色在前端需要时会自动触发预加载
-    target_voice_id = voice_ids[0]
+
     logger.info("[预加载] 开始为音色 %s 预生成常用句（后台低优先级，不阻塞用户请求）", target_voice_id)
-    
+
     voice_path = VOICES_DIR / f"{target_voice_id}.wav"
     if not voice_path.exists():
         logger.warning("[预加载] 音色文件不存在: %s", voice_path)
@@ -255,6 +245,17 @@ async def auto_preload_common_phrases():
             logger.debug("[预加载] 预加载短语失败: %s", e)
     
     logger.info("[预加载] 完成：%d/%d 个短语预加载成功（音色: %s）", success_count, len(COMMON_PHRASES), target_voice_id)
+
+
+async def auto_preload_common_phrases():
+    """模型加载完成后，自动为已有音色预生成常用句。"""
+    voice_ids = get_registered_voice_ids()
+    if not voice_ids:
+        logger.info("[预加载] 暂无已注册的克隆音色，跳过自动预加载")
+        return
+
+    # 默认仅预热第一个可用音色，避免服务启动时长时间占用推理资源。
+    await auto_preload_common_phrases_for_voice(voice_ids[0])
 
 
 def save_voice_sample(audio_base64: str, voice_id: str) -> Path:
@@ -308,38 +309,56 @@ async def clone_and_synthesize(
         _tts_cache.move_to_end(ck)
         return _tts_cache[ck]
 
+    if ck:
+        inflight = _tts_inflight.get(ck)
+        if inflight is not None:
+            logger.info("[合成] 等待进行中的相同请求: text=%s..., voice_id=%s", text[:30], key_id)
+            return await inflight
+
     # 初始化锁（如果还没有）
     if _inference_lock is None:
         _inference_lock = asyncio.Lock()
-    
-    # 使用锁保护模型推理，确保串行执行（IndexTTS2 不是线程安全的）
-    async with _inference_lock:
-        loop = asyncio.get_running_loop()
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            out_path = Path(f.name)
-        try:
-            await loop.run_in_executor(
-                None,
-                lambda: _synthesize_sync(
-                    text,
-                    voice_sample_path,
-                    out_path,
-                    emo_alpha=emo_alpha,
-                    use_emo_text=use_emo_text,
-                ),
-            )
-            wav_bytes = out_path.read_bytes()
-            if ck and TTS_CACHE_MAX > 0:
-                while len(_tts_cache) >= TTS_CACHE_MAX and _tts_cache:
-                    _tts_cache.popitem(last=False)
-                _tts_cache[ck] = wav_bytes
-                _tts_cache.move_to_end(ck)
-            return wav_bytes
-        finally:
+
+    async def do_inference() -> bytes:
+        # 使用锁保护模型推理，确保串行执行（IndexTTS2 不是线程安全的）
+        async with _inference_lock:
+            loop = asyncio.get_running_loop()
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                out_path = Path(f.name)
             try:
-                out_path.unlink(missing_ok=True)
-            except Exception:
-                pass
+                await loop.run_in_executor(
+                    None,
+                    lambda: _synthesize_sync(
+                        text,
+                        voice_sample_path,
+                        out_path,
+                        emo_alpha=emo_alpha,
+                        use_emo_text=use_emo_text,
+                    ),
+                )
+                wav_bytes = out_path.read_bytes()
+                if ck and TTS_CACHE_MAX > 0:
+                    while len(_tts_cache) >= TTS_CACHE_MAX and _tts_cache:
+                        _tts_cache.popitem(last=False)
+                    _tts_cache[ck] = wav_bytes
+                    _tts_cache.move_to_end(ck)
+                return wav_bytes
+            finally:
+                try:
+                    out_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+    if not ck:
+        return await do_inference()
+
+    task = asyncio.create_task(do_inference())
+    _tts_inflight[ck] = task
+    try:
+        return await task
+    finally:
+        if _tts_inflight.get(ck) is task:
+            _tts_inflight.pop(ck, None)
 
 
 async def handle_client(websocket, path=None):
@@ -439,6 +458,9 @@ async def handle_client(websocket, path=None):
                             }
                         )
                     )
+
+                    if _model_ready and tts_model is not None and os.environ.get("DISABLE_AUTO_PRELOAD", "").lower() not in ("1", "true", "yes"):
+                        asyncio.create_task(auto_preload_common_phrases_for_voice(voice_id))
 
                 elif action == "synthesize":
                     _active_user_requests += 1
