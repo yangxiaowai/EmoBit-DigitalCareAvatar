@@ -96,6 +96,52 @@ describe('voice clone (functional)', () => {
     expect(edgeSpeak).not.toHaveBeenCalled();
   });
 
+  it('falls back to Edge TTS when clone playback fails and backs off repeated clone retries', async () => {
+    const cloneSpeak = vi.fn(async () => {
+      throw new Error('语音克隆服务连接失败');
+    });
+    const edgeSpeak = vi.fn(async (_text: string, _voice: string, onEnded?: () => void) => {
+      onEnded?.();
+    });
+
+    vi.doMock('../services/voiceCloneService', () => {
+      return {
+        voiceCloneService: {
+          checkConnection: vi.fn(async () => true),
+          registerVoice: vi.fn(),
+          preloadPhrases: vi.fn(async () => undefined),
+          listVoices: vi.fn(async () => []),
+          speak: cloneSpeak,
+          stop: vi.fn(),
+          synthesize: vi.fn(),
+        },
+      };
+    });
+
+    vi.doMock('../services/ttsService', () => {
+      return {
+        edgeTTSService: {
+          speak: edgeSpeak,
+          synthesize: vi.fn(),
+          stop: vi.fn(),
+          preload: vi.fn(),
+          checkConnection: vi.fn(async () => true),
+        },
+      };
+    });
+
+    const { VoiceService } = await import('../services/api');
+    const onEnded = vi.fn();
+
+    await VoiceService.speak('你好，我是你的数字人助手', 'cloned_test_voice', undefined, onEnded);
+    await VoiceService.speak('再次问候', 'cloned_test_voice', undefined, onEnded);
+
+    expect(cloneSpeak).toHaveBeenCalledTimes(1);
+    expect(edgeSpeak).toHaveBeenCalledTimes(2);
+    expect(edgeSpeak).toHaveBeenNthCalledWith(1, '你好，我是你的数字人助手', 'xiaoyi', onEnded);
+    expect(edgeSpeak).toHaveBeenNthCalledWith(2, '再次问候', 'xiaoyi', onEnded);
+  });
+
   it('falls back safely when clone service unavailable', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});

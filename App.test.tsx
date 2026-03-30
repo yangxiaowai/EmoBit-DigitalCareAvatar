@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SimulationType } from './types';
 
@@ -29,7 +29,13 @@ vi.mock('./components/Dashboard', () => {
 
 vi.mock('./components/ElderlyApp', () => {
   return {
-    default: () => <div>__ELDERLY_APP_VIEW__</div>,
+    default: ({ externalAction, externalMessage }: any) => (
+      <div>
+        <div>__ELDERLY_APP_VIEW__</div>
+        <div>__ELDERLY_ACTION__:{externalAction?.action || ''}</div>
+        <div>__ELDERLY_MESSAGE__:{externalMessage?.text || ''}</div>
+      </div>
+    ),
   };
 });
 
@@ -81,7 +87,7 @@ describe('App (functional)', () => {
 
     expect(screen.getByText('__DASHBOARD_VIEW__')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '老人端 (App)' }));
+    await user.click(screen.getAllByRole('button', { name: '老人端 (App)' })[0]!);
     expect(screen.getByText('__ELDERLY_APP_VIEW__')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '家属端 (后台)' }));
@@ -96,5 +102,28 @@ describe('App (functional)', () => {
     render(<App />);
     expect(screen.getAllByText('检测到异常行为').length).toBeGreaterThan(0);
   });
-});
 
+  it('applies local ui commands to the elderly app', async () => {
+    const user = userEvent.setup();
+    vi.resetModules();
+    mockSundowningService({ riskLevel: 'low' });
+    const { publishLocalUiCommand } = await import('./services/localUiCommandBus');
+    const { default: App } = await import('./App');
+
+    render(<App />);
+
+    publishLocalUiCommand({
+      type: 'elder.action',
+      payload: {
+        action: 'speak_text',
+        text: '本地兜底播报',
+      },
+    });
+
+    await user.click(screen.getAllByRole('button', { name: '老人端 (App)' })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByText('__ELDERLY_ACTION__:speak_text')).toBeInTheDocument();
+    });
+  });
+});

@@ -8,6 +8,7 @@ import { sundowningService } from './services/sundowningService';
 import { wanderingService } from './services/wanderingService';
 import { medicationService } from './services/medicationService';
 import { openclawSyncService } from './services/openclawSyncService';
+import { subscribeLocalUiCommands } from './services/localUiCommandBus';
 import { isGuardianOnlyBridgeMessage } from './utils/openclawMessageGuards';
 import { getOpenClawBridgeBaseUrl } from './utils/runtimeConfig';
 
@@ -19,6 +20,8 @@ const App: React.FC = () => {
   const [elderMessage, setElderMessage] = useState<{ id: string; text: string; purpose?: string; timestamp?: number } | null>(null);
   const [elderAction, setElderAction] = useState<{ id: string; action: string; payload?: Record<string, unknown>; timestamp?: number } | null>(null);
   const lastUiCommandTsRef = useRef<number>(0);
+  const uiCommandPollFailureCountRef = useRef<number>(0);
+  const uiCommandPollBackoffUntilRef = useRef<number>(0);
 
   // Helper to add logs
   const addLog = useCallback((module: string, message: string, level: LogEntry['level'] = 'info') => {
@@ -114,6 +117,87 @@ const App: React.FC = () => {
     };
   }, [addLog, simulation]);
 
+  const applyUiCommand = useCallback((cmd: any) => {
+    switch (cmd.type) {
+      case 'status.set': {
+        const v = String(cmd.payload?.status || '').toLowerCase();
+        if (v === 'critical') setSystemStatus(SystemStatus.CRITICAL);
+        else if (v === 'warning') setSystemStatus((prev) => (prev === SystemStatus.CRITICAL ? prev : SystemStatus.WARNING));
+        else if (v === 'normal') setSystemStatus(SystemStatus.NORMAL);
+        return;
+      }
+      case 'log.add': {
+        addLog(
+          cmd.payload?.module || 'OPENCLAW',
+          cmd.payload?.message || '收到 OpenClaw 指令',
+          cmd.payload?.level || 'info'
+        );
+        return;
+      }
+      case 'view.set': {
+        const view = cmd.payload?.view;
+        if (view === 'dashboard' || view === 'app') setActiveView(view);
+        return;
+      }
+      case 'outbound.recorded': {
+        const purpose = cmd.payload?.purpose || 'general';
+        const channel = cmd.payload?.channel || 'message';
+        const audience = String(cmd.payload?.audience || '');
+        const message = String(cmd.payload?.message || '').trim();
+        if (
+          audience === 'elder' &&
+          channel === 'frontend' &&
+          isGuardianOnlyBridgeMessage({ text: message, purpose })
+        ) {
+          addLog('OPENCLAW', `已忽略误投到老人前端的家属通知记录（${purpose}）`, 'warn');
+          return;
+        }
+        const targets = Array.isArray(cmd.payload?.targets) ? cmd.payload.targets.join(',') : '';
+        addLog('OPENCLAW', `已执行通知动作（${purpose}/${channel}）${targets ? ` → ${targets}` : ''}`, 'success');
+        return;
+      }
+      case 'elder.message': {
+        const text = String(cmd.payload?.message || '').trim();
+        if (!text) return;
+        const purpose = String(cmd.payload?.purpose || 'general');
+        const timestamp = typeof cmd.timestamp === 'number' ? cmd.timestamp : Date.now();
+        if (isGuardianOnlyBridgeMessage({ text, purpose })) {
+          addLog('OPENCLAW', `已拦截家属专属消息，未向老人端播报（${purpose}）`, 'warn');
+          return;
+        }
+        setElderMessage({
+          id: String(cmd.id || `elder_${Date.now()}`),
+          text,
+          purpose,
+          timestamp,
+        });
+        addLog('OPENCLAW', `已将老人沟通文案回写到前端（${purpose}）`, 'info');
+        return;
+      }
+      case 'elder.action': {
+        const action = String(cmd.payload?.action || '').trim();
+        if (!action) return;
+        const timestamp = typeof cmd.timestamp === 'number' ? cmd.timestamp : Date.now();
+        setElderAction({
+          id: String(cmd.id || `elder_action_${Date.now()}`),
+          action,
+          payload: cmd.payload || {},
+          timestamp,
+        });
+        addLog('OPENCLAW', `已下发家属联动动作（${action}）`, 'info');
+        return;
+      }
+      default:
+        return;
+    }
+  }, [addLog]);
+
+  useEffect(() => {
+    return subscribeLocalUiCommands((command) => {
+      applyUiCommand(command);
+    });
+  }, [applyUiCommand]);
+
   // OpenClaw → UI：轮询 Bridge 的 uiCommands，把 OpenClaw 的决策/动作结果回写到界面
   useEffect(() => {
     const enabled = openclawSyncService.isEnabled();
@@ -125,82 +209,11 @@ const App: React.FC = () => {
 
     const token = import.meta.env.VITE_OPENCLAW_BRIDGE_TOKEN as string | undefined;
 
-    const applyCommand = (cmd: any) => {
-      switch (cmd.type) {
-        case 'status.set': {
-          const v = String(cmd.payload?.status || '').toLowerCase();
-          if (v === 'critical') setSystemStatus(SystemStatus.CRITICAL);
-          else if (v === 'warning') setSystemStatus((prev) => (prev === SystemStatus.CRITICAL ? prev : SystemStatus.WARNING));
-          else if (v === 'normal') setSystemStatus(SystemStatus.NORMAL);
-          return;
-        }
-        case 'log.add': {
-          addLog(
-            cmd.payload?.module || 'OPENCLAW',
-            cmd.payload?.message || '收到 OpenClaw 指令',
-            cmd.payload?.level || 'info'
-          );
-          return;
-        }
-        case 'view.set': {
-          const view = cmd.payload?.view;
-          if (view === 'dashboard' || view === 'app') setActiveView(view);
-          return;
-        }
-        case 'outbound.recorded': {
-          const purpose = cmd.payload?.purpose || 'general';
-          const channel = cmd.payload?.channel || 'message';
-          const audience = String(cmd.payload?.audience || '');
-          const message = String(cmd.payload?.message || '').trim();
-          if (
-            audience === 'elder' &&
-            channel === 'frontend' &&
-            isGuardianOnlyBridgeMessage({ text: message, purpose })
-          ) {
-            addLog('OPENCLAW', `已忽略误投到老人前端的家属通知记录（${purpose}）`, 'warn');
-            return;
-          }
-          const targets = Array.isArray(cmd.payload?.targets) ? cmd.payload.targets.join(',') : '';
-          addLog('OPENCLAW', `已执行通知动作（${purpose}/${channel}）${targets ? ` → ${targets}` : ''}`, 'success');
-          return;
-        }
-        case 'elder.message': {
-          const text = String(cmd.payload?.message || '').trim();
-          if (!text) return;
-          const purpose = String(cmd.payload?.purpose || 'general');
-          const timestamp = typeof cmd.timestamp === 'number' ? cmd.timestamp : Date.now();
-          if (isGuardianOnlyBridgeMessage({ text, purpose })) {
-            addLog('OPENCLAW', `已拦截家属专属消息，未向老人端播报（${purpose}）`, 'warn');
-            return;
-          }
-          setElderMessage({
-            id: String(cmd.id || `elder_${Date.now()}`),
-            text,
-            purpose,
-            timestamp,
-          });
-          addLog('OPENCLAW', `已将老人沟通文案回写到前端（${purpose}）`, 'info');
-          return;
-        }
-        case 'elder.action': {
-          const action = String(cmd.payload?.action || '').trim();
-          if (!action) return;
-          const timestamp = typeof cmd.timestamp === 'number' ? cmd.timestamp : Date.now();
-          setElderAction({
-            id: String(cmd.id || `elder_action_${Date.now()}`),
-            action,
-            payload: cmd.payload || {},
-            timestamp,
-          });
-          addLog('OPENCLAW', `已下发家属联动动作（${action}）`, 'info');
-          return;
-        }
-        default:
-          return;
-      }
-    };
-
     const poll = async () => {
+      if (Date.now() < uiCommandPollBackoffUntilRef.current) {
+        return;
+      }
+
       try {
         const since = lastUiCommandTsRef.current || 0;
         const url = new URL('/api/ui/commands', baseUrl);
@@ -214,21 +227,25 @@ const App: React.FC = () => {
         if (!res.ok) return;
         const json = await res.json();
         const commands = Array.isArray(json.commands) ? json.commands : [];
+        uiCommandPollFailureCountRef.current = 0;
+        uiCommandPollBackoffUntilRef.current = 0;
         for (const cmd of commands.reverse()) {
           if (typeof cmd.timestamp === 'number') {
             lastUiCommandTsRef.current = Math.max(lastUiCommandTsRef.current, cmd.timestamp);
           }
-          applyCommand(cmd);
+          applyUiCommand(cmd);
         }
       } catch {
-        // ignore polling errors in demo mode
+        uiCommandPollFailureCountRef.current += 1;
+        const backoffMs = Math.min(30000, 2000 * (2 ** (uiCommandPollFailureCountRef.current - 1)));
+        uiCommandPollBackoffUntilRef.current = Date.now() + backoffMs;
       }
     };
 
     poll();
     const timer = setInterval(poll, 2000);
     return () => clearInterval(timer);
-  }, [addLog]);
+  }, [applyUiCommand]);
 
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans text-slate-900">

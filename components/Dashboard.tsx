@@ -22,6 +22,7 @@ import {
 } from '../services/sundowningService';
 import { openclawSyncService } from '../services/openclawSyncService';
 import { openclawActionService } from '../services/openclawActionService';
+import { publishLocalUiCommand } from '../services/localUiCommandBus';
 import { getOpenClawBridgeBaseUrl } from '../utils/runtimeConfig';
 import { ShieldCheck, MapPin, Heart, Pill, AlertTriangle, Phone, Activity, Clock, User, Calendar, LayoutGrid, FileText, Settings, ChevronRight, Eye, Brain, Layers, Play, Pause, SkipBack, SkipForward, History, AlertCircle, Signal, Wifi, Battery, Moon, Footprints, Sun, Cloud, ArrowLeft, Mic, Upload, Sparkles, CheckCircle, Volume2, ToggleRight, Loader2, ScanFace, Box, Wand2, Plus, X, Users, Camera, TrendingUp, BookOpen, MessageCircle, MessageSquare, Link2, ArrowUpRight } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, AreaChart, Area, BarChart, Bar, CartesianGrid } from 'recharts';
@@ -969,6 +970,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
     const [locationAutomationEvents, setLocationAutomationEvents] = useState<LocationAutomationEvent[]>(locationAutomationService.getEvents(4));
     const [familyControlFlash, setFamilyControlFlash] = useState<string | null>(null);
     const [guardianNotice, setGuardianNotice] = useState<GuardianNoticeCard | null>(null);
+    const [overviewChartReady, setOverviewChartReady] = useState(false);
 
     // 上海市静安区美丽园小区（延安西路379弄）- 真实地址作为安全中心，电子围栏半径 100m
     const HOME_LAT = 31.2192;
@@ -980,6 +982,27 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
     const NUM_POINTS = Math.floor((TOTAL_HOURS * 3600) / POINT_INTERVAL_SEC); // 240 点
     const PLAYBACK_MS_PER_POINT = 400;      // 回放时每点间隔 400ms，兼顾逆地理解析速度
     const SAFE_ZONE_RADIUS_DEG = 0.0009;    // 约 100 米对应的纬度近似量（111km/度）
+
+    useEffect(() => {
+        if (activeTab !== 'overview' || isSettingsOpen) {
+            setOverviewChartReady(false);
+            return;
+        }
+
+        let raf1 = 0;
+        let raf2 = 0;
+        setOverviewChartReady(false);
+        raf1 = window.requestAnimationFrame(() => {
+            raf2 = window.requestAnimationFrame(() => {
+                setOverviewChartReady(true);
+            });
+        });
+
+        return () => {
+            if (raf1) window.cancelAnimationFrame(raf1);
+            if (raf2) window.cancelAnimationFrame(raf2);
+        };
+    }, [activeTab, isSettingsOpen]);
 
     const distFromHome = (lat: number, lng: number) =>
         Math.sqrt((lat - HOME_LAT) ** 2 + (lng - HOME_LNG) ** 2);
@@ -1144,8 +1167,19 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
     };
 
     const postElderAction = async (action: string, payload: Record<string, unknown>, purpose = 'family_control') => {
+        const runLocalFallback = () => {
+            publishLocalUiCommand({
+                type: 'elder.action',
+                payload: {
+                    action,
+                    ...payload,
+                },
+            });
+        };
+
         if (!openclawActionService.isConfigured()) {
-            setFamilyControlFlash(`Bridge 未配置，无法下发动作：${action}`);
+            runLocalFallback();
+            setFamilyControlFlash(`Bridge 未配置，已本地下发动作：${action}`);
             return;
         }
         try {
@@ -1157,7 +1191,8 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
             });
             setFamilyControlFlash(`已下发动作：${action}`);
         } catch {
-            setFamilyControlFlash(`动作下发失败：${action}`);
+            runLocalFallback();
+            setFamilyControlFlash(`Bridge 不可用，已本地下发动作：${action}`);
         }
     };
 
@@ -2333,7 +2368,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         }));
     }, [sundowningHistory]);
 
-    const OverviewTab = () => (
+    const renderOverviewTab = () => (
         <div className="flex flex-col gap-6 pb-28 p-5 animate-fade-in-up">
             {/* Header Section */}
             <div className="flex justify-between items-end px-1 mt-2">
@@ -2426,8 +2461,9 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                     </div>
                 </div>
 
-                <div className="h-28 mt-3">
-                    <ResponsiveContainer width="100%" height="100%">
+                <div className="h-28 mt-3 min-w-0">
+                    {overviewChartReady ? (
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={112}>
                         <LineChart data={sundowningTrendData} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                             <XAxis
@@ -2461,6 +2497,9 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                             />
                         </LineChart>
                     </ResponsiveContainer>
+                    ) : (
+                        <div className="h-full w-full rounded-2xl bg-slate-50 animate-pulse" />
+                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mt-3">
@@ -3595,7 +3634,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                                 </button>
                             </div>
 
-                            {activeTab === 'overview' && <OverviewTab />}
+                            {activeTab === 'overview' && renderOverviewTab()}
                             {activeTab === 'health' && <HealthTab />}
                             {activeTab === 'location' && (
                                 <LocationTabContent

@@ -75,6 +75,9 @@ export class OpenClawSyncService {
     private enabled: boolean;
     private elderId: string;
     private lastPayloadByKey = new Map<string, { ts: number; signature: string }>();
+    private bridgeBackoffUntil = 0;
+    private consecutiveFailures = 0;
+    private lastFailureLogAt = 0;
 
     constructor(options?: OpenClawSyncServiceOptions) {
         this.baseUrl = (options?.baseUrl ?? getOpenClawBridgeBaseUrl()).replace(/\/$/, '');
@@ -303,6 +306,7 @@ export class OpenClawSyncService {
 
     private fireAndForget(path: string, body: unknown, opts?: { dedupeKey?: string; throttleMs?: number }): void {
         if (!this.enabled || !this.baseUrl) return;
+        if (Date.now() < this.bridgeBackoffUntil) return;
         if (opts?.dedupeKey && this.shouldSkip(opts.dedupeKey, body, opts.throttleMs ?? DEFAULT_THROTTLE_MS)) {
             return;
         }
@@ -314,8 +318,17 @@ export class OpenClawSyncService {
                 ...(this.token ? { 'x-emobit-bridge-token': this.token } : {}),
             },
             body: JSON.stringify(body),
+        }).then(() => {
+            this.consecutiveFailures = 0;
+            this.bridgeBackoffUntil = 0;
         }).catch((error) => {
-            console.warn(`[OpenClawSync] Failed to sync ${path}:`, error);
+            this.consecutiveFailures += 1;
+            const backoffMs = Math.min(30000, 2000 * (2 ** (this.consecutiveFailures - 1)));
+            this.bridgeBackoffUntil = Date.now() + backoffMs;
+            if (Date.now() - this.lastFailureLogAt >= 5000) {
+                this.lastFailureLogAt = Date.now();
+                console.warn(`[OpenClawSync] Failed to sync ${path}; backing off for ${backoffMs}ms:`, error);
+            }
         });
     }
 

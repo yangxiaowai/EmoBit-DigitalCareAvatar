@@ -394,11 +394,12 @@ class VoiceCloneService {
             } catch (err) {
                 console.error("Audio playback failed", err);
                 this.currentAudio = null;
-                onEnded?.();
+                URL.revokeObjectURL(result.audioUrl!);
+                throw err instanceof Error ? err : new Error(String(err));
             }
         } else {
             console.error('[VoiceClone] 播放失败:', result.error);
-            onEnded?.();
+            throw new Error(result.error || '语音克隆播放失败');
         }
     }
 

@@ -8,8 +8,12 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
+const app = <App />;
+
 root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+  import.meta.env.DEV ? app : (
+    <React.StrictMode>
+      {app}
+    </React.StrictMode>
+  )
 );

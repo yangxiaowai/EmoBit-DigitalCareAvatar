@@ -11,6 +11,8 @@ import { voiceSelectionService } from './voiceSelectionService';
 
 /** 默认 TTS 声音：孙女风格（晓伊，年轻女声/女童声） */
 const DEFAULT_TTS_VOICE: VoiceType = 'xiaoyi';
+const CLONE_VOICE_FAILURE_COOLDOWN_MS = 30_000;
+const cloneVoiceBackoffUntil = new Map<string, number>();
 
 /** Edge TTS 可选音色（id 为 edge_xxx，与后端 voice key 一致） */
 const EDGE_VOICE_OPTIONS: { id: string; name: string; voiceKey: VoiceType }[] = [
@@ -41,6 +43,28 @@ function resolveVoiceTarget(voiceId?: string): { kind: 'clone'; voiceId: string 
     return { kind: 'clone', voiceId: selectedVoiceId };
   }
   return { kind: 'edge', voice: getEffectiveVoice(selectedVoiceId) };
+}
+
+function isCloneVoiceInBackoff(voiceId: string): boolean {
+  return (cloneVoiceBackoffUntil.get(voiceId) || 0) > Date.now();
+}
+
+function markCloneVoiceFailed(voiceId: string, error?: unknown): void {
+  const previous = cloneVoiceBackoffUntil.get(voiceId) || 0;
+  cloneVoiceBackoffUntil.set(voiceId, Date.now() + CLONE_VOICE_FAILURE_COOLDOWN_MS);
+  if (previous <= Date.now()) {
+    console.warn(`[VoiceService] 克隆音色 ${voiceId} 当前不可用，已临时回退到 Edge TTS。`, error);
+  }
+}
+
+function clearCloneVoiceFailure(voiceId: string): void {
+  cloneVoiceBackoffUntil.delete(voiceId);
+}
+
+async function synthesizeWithEdgeVoice(text: string, voice: VoiceType = DEFAULT_TTS_VOICE): Promise<string> {
+  const result = await edgeTTSService.synthesize(text, voice);
+  if (result.success && result.audioUrl) return result.audioUrl;
+  throw new Error(result.error || '语音合成失败');
 }
 
 // 配置：设置为 false 以启用真实 API 调用
@@ -144,16 +168,26 @@ export const VoiceService = {
     }
 
     const target = resolveVoiceTarget(voiceId);
-    try {
-      if (target.kind === 'clone') {
-        const result = await voiceCloneService.synthesize(text, target.voiceId, 'zh');
-        if (result.success && result.audioUrl) return result.audioUrl;
-        throw new Error(result.error || '语音克隆合成失败');
+    if (target.kind === 'clone') {
+      if (isCloneVoiceInBackoff(target.voiceId)) {
+        return synthesizeWithEdgeVoice(text);
       }
 
-      const result = await edgeTTSService.synthesize(text, target.voice);
-      if (result.success && result.audioUrl) return result.audioUrl;
-      throw new Error(result.error || '语音合成失败');
+      try {
+        const result = await voiceCloneService.synthesize(text, target.voiceId, 'zh');
+        if (result.success && result.audioUrl) {
+          clearCloneVoiceFailure(target.voiceId);
+          return result.audioUrl;
+        }
+        throw new Error(result.error || '语音克隆合成失败');
+      } catch (error) {
+        markCloneVoiceFailed(target.voiceId, error);
+        return synthesizeWithEdgeVoice(text);
+      }
+    }
+
+    try {
+      return synthesizeWithEdgeVoice(text, target.voice);
     } catch (error) {
       console.error('[VoiceService] 语音合成失败:', error);
       throw error;
@@ -203,13 +237,31 @@ export const VoiceService = {
     }
 
     const target = resolveVoiceTarget(voiceId);
-    try {
-      if (target.kind === 'clone') {
-        console.log(`[VoiceService] 播放语音: "${text}" (Clone Voice: ${target.voiceId})`);
-        await voiceCloneService.speak(text, target.voiceId, 'zh', onEnded);
+    if (target.kind === 'clone') {
+      if (isCloneVoiceInBackoff(target.voiceId)) {
+        await edgeTTSService.speak(text, DEFAULT_TTS_VOICE, onEnded);
         return;
       }
 
+      try {
+        console.log(`[VoiceService] 播放语音: "${text}" (Clone Voice: ${target.voiceId})`);
+        await voiceCloneService.speak(text, target.voiceId, 'zh', onEnded);
+        clearCloneVoiceFailure(target.voiceId);
+        return;
+      } catch (error) {
+        markCloneVoiceFailed(target.voiceId, error);
+        try {
+          console.log(`[VoiceService] 播放语音: "${text}" (Edge TTS Fallback: ${DEFAULT_TTS_VOICE})`);
+          await edgeTTSService.speak(text, DEFAULT_TTS_VOICE, onEnded);
+        } catch (fallbackError) {
+          console.error('[VoiceService] ❌ Edge TTS 回退播放失败:', fallbackError);
+          onEnded?.();
+        }
+        return;
+      }
+    }
+
+    try {
       console.log(`[VoiceService] 播放语音: "${text}" (Edge TTS: ${target.voice})`);
       await edgeTTSService.speak(text, target.voice, onEnded);
     } catch (error) {
@@ -269,7 +321,19 @@ export const VoiceService = {
   preloadClonePhrases: (voiceId?: string): void => {
     const target = resolveVoiceTarget(voiceId);
     if (target.kind === 'clone') {
-      void voiceCloneService.preloadPhrases(target.voiceId, COMMON_CLONE_PHRASES).catch(() => { });
+      if (isCloneVoiceInBackoff(target.voiceId)) {
+        edgeTTSService.preload(COMMON_TTS_PHRASES, DEFAULT_TTS_VOICE).catch(() => { });
+        return;
+      }
+
+      void voiceCloneService.preloadPhrases(target.voiceId, COMMON_CLONE_PHRASES)
+        .then(() => {
+          clearCloneVoiceFailure(target.voiceId);
+        })
+        .catch((error) => {
+          markCloneVoiceFailed(target.voiceId, error);
+          edgeTTSService.preload(COMMON_TTS_PHRASES, DEFAULT_TTS_VOICE).catch(() => { });
+        });
       return;
     }
     edgeTTSService.preload(COMMON_TTS_PHRASES, target.voice).catch(() => { });
