@@ -373,171 +373,211 @@ const mockSleepData = [
     { name: '清醒', hours: 1, fill: '#C4B5FD' },
 ];
 
-    const buildRealtimeSeries = (baseBpm: number, basePressure: number, baseSpo2: number) => {
-        const initial: { time: string; bpm: number; pressure: number; spo2: number }[] = [];
-        const now = new Date();
-        for (let i = 60; i >= 0; i--) {
-            const t = new Date(now.getTime() - i * 1000);
-            initial.push({
-                time: t.toLocaleTimeString('en-US', {
-                    hour12: false,
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                }),
-                bpm: Math.round(baseBpm + Math.sin((now.getTime() - i * 1000) / 5000) * 6 + (Math.random() * 4 - 2)),
-                pressure: Math.round(basePressure + Math.sin((now.getTime() - i * 1000) / 8000) * 8 + (Math.random() * 4 - 2)),
-                spo2: Math.round(baseSpo2 + Math.sin((now.getTime() - i * 1000) / 7000) * 1.2 + (Math.random() * 1.5 - 0.75)),
-            });
-        }
-        return initial;
-    };
+const MIN_VOICE_SAMPLE_SECONDS = 10;
 
-    const RealTimeHealthCharts: React.FC<{ metrics: HealthMetrics }> = ({ metrics }) => {
-        const [activeChart, setActiveChart] = useState<'heart' | 'bp' | 'spo2'>('heart');
-        const [data, setData] = useState(() =>
+const buildRealtimeSeries = (baseBpm: number, basePressure: number, baseSpo2: number) => {
+    const initial: { time: string; bpm: number; pressure: number; spo2: number }[] = [];
+    const now = new Date();
+    for (let i = 60; i >= 0; i--) {
+        const t = new Date(now.getTime() - i * 1000);
+        initial.push({
+            time: t.toLocaleTimeString('en-US', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+            }),
+            bpm: Math.round(baseBpm + Math.sin((now.getTime() - i * 1000) / 5000) * 6 + (Math.random() * 4 - 2)),
+            pressure: Math.round(basePressure + Math.sin((now.getTime() - i * 1000) / 8000) * 8 + (Math.random() * 4 - 2)),
+            spo2: Math.round(baseSpo2 + Math.sin((now.getTime() - i * 1000) / 7000) * 1.2 + (Math.random() * 1.5 - 0.75)),
+        });
+    }
+    return initial;
+};
+
+function formatRealtimeTickLabel(value: string): string {
+    const parts = value.split(':');
+    if (parts.length >= 3) return `${parts[1]}:${parts[2]}`;
+    return value;
+}
+
+function getRealtimeAxisTicks(data: { time: string }[]): string[] {
+    if (data.length <= 1) return data.map((item) => item.time);
+    const desiredSegments = 4;
+    const step = Math.max(1, Math.round((data.length - 1) / desiredSegments));
+    const tickIndexes = new Set<number>([0, data.length - 1]);
+    for (let index = step; index < data.length - 1; index += step) {
+        tickIndexes.add(index);
+    }
+    return Array.from(tickIndexes)
+        .sort((a, b) => a - b)
+        .map((index) => data[index]?.time)
+        .filter((value): value is string => Boolean(value));
+}
+
+const RealTimeHealthCharts: React.FC<{ metrics: HealthMetrics }> = ({ metrics }) => {
+    const [activeChart, setActiveChart] = useState<'heart' | 'bp' | 'spo2'>('heart');
+    const [data, setData] = useState(() =>
+        buildRealtimeSeries(
+            metrics.heartRate,
+            metrics.bloodPressure.systolic,
+            metrics.bloodOxygen
+        )
+    );
+    const [chartReady, setChartReady] = useState(false);
+
+    const xAxisTicks = useMemo(() => getRealtimeAxisTicks(data), [data]);
+
+    // 等布局稳定后再挂图表，避免 ResponsiveContainer 在首次测量时拿到 -1。
+    useEffect(() => {
+        setChartReady(false);
+        let frame1 = 0;
+        let frame2 = 0;
+        frame1 = requestAnimationFrame(() => {
+            frame2 = requestAnimationFrame(() => setChartReady(true));
+        });
+        return () => {
+            cancelAnimationFrame(frame1);
+            cancelAnimationFrame(frame2);
+        };
+    }, [activeChart]);
+
+    // 当右侧控制面板调整生命体征时，重置曲线基线
+    useEffect(() => {
+        setData(
             buildRealtimeSeries(
                 metrics.heartRate,
                 metrics.bloodPressure.systolic,
                 metrics.bloodOxygen
             )
         );
+    }, [metrics.heartRate, metrics.bloodPressure.systolic, metrics.bloodOxygen]);
 
-        // 当右侧控制面板调整生命体征时，重置曲线基线
-        useEffect(() => {
-            setData(
-                buildRealtimeSeries(
-                    metrics.heartRate,
-                    metrics.bloodPressure.systolic,
-                    metrics.bloodOxygen
-                )
-            );
-        }, [metrics.heartRate, metrics.bloodPressure.systolic, metrics.bloodOxygen]);
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setData((prevData) => {
+                const now = new Date();
+                const newPoint = {
+                    time: now.toLocaleTimeString('en-US', {
+                        hour12: false,
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                    }),
+                    bpm: Math.round(
+                        metrics.heartRate +
+                            Math.sin(now.getTime() / 5000) * 6 +
+                            (Math.random() * 4 - 2)
+                    ),
+                    pressure: Math.round(
+                        metrics.bloodPressure.systolic +
+                            Math.sin(now.getTime() / 8000) * 8 +
+                            (Math.random() * 4 - 2)
+                    ),
+                    spo2: Math.round(
+                        metrics.bloodOxygen +
+                            Math.sin(now.getTime() / 7000) * 1.2 +
+                            (Math.random() * 1.5 - 0.75)
+                    ),
+                };
+                return [...prevData.slice(1), newPoint];
+            });
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [metrics.heartRate, metrics.bloodPressure.systolic, metrics.bloodOxygen]);
 
-        useEffect(() => {
-            const interval = setInterval(() => {
-                setData(prevData => {
-                    const now = new Date();
-                    const newPoint = {
-                        time: now.toLocaleTimeString('en-US', {
-                            hour12: false,
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit',
-                        }),
-                        bpm: Math.round(
-                            metrics.heartRate +
-                                Math.sin(now.getTime() / 5000) * 6 +
-                                (Math.random() * 4 - 2)
-                        ),
-                        pressure: Math.round(
-                            metrics.bloodPressure.systolic +
-                                Math.sin(now.getTime() / 8000) * 8 +
-                                (Math.random() * 4 - 2)
-                        ),
-                        spo2: Math.round(
-                            metrics.bloodOxygen +
-                                Math.sin(now.getTime() / 7000) * 1.2 +
-                                (Math.random() * 1.5 - 0.75)
-                        ),
-                    };
-                    return [...prevData.slice(1), newPoint];
-                });
-            }, 1000);
-            return () => clearInterval(interval);
-        }, [metrics.heartRate, metrics.bloodPressure.systolic, metrics.bloodOxygen]);
+    const latestBpm = data[data.length - 1]?.bpm ?? metrics.heartRate;
+    const latestPressure = data[data.length - 1]?.pressure ?? metrics.bloodPressure.systolic;
+    const latestSpo2 = data[data.length - 1]?.spo2 ?? metrics.bloodOxygen;
 
-        const latestBpm = data[data.length - 1]?.bpm ?? metrics.heartRate;
-        const latestPressure = data[data.length - 1]?.pressure ?? metrics.bloodPressure.systolic;
-        const latestSpo2 = data[data.length - 1]?.spo2 ?? metrics.bloodOxygen;
+    const isHeartNormal = latestBpm >= 60 && latestBpm <= 100;
+    const isPressureNormal = latestPressure >= 90 && latestPressure <= 140;
+    const isSpo2Normal = latestSpo2 >= 95;
 
-        const isHeartNormal = latestBpm >= 60 && latestBpm <= 100;
-        const isPressureNormal = latestPressure >= 90 && latestPressure <= 140;
-        const isSpo2Normal = latestSpo2 >= 95;
+    const currentValue =
+        activeChart === 'heart'
+            ? latestBpm
+            : activeChart === 'bp'
+                ? latestPressure
+                : latestSpo2;
 
-        const currentValue =
-            activeChart === 'heart'
-                ? latestBpm
-                : activeChart === 'bp'
-                    ? latestPressure
-                    : latestSpo2;
+    const currentUnit =
+        activeChart === 'heart'
+            ? 'bpm'
+            : activeChart === 'bp'
+                ? 'mmHg (收缩压)'
+                : '%';
 
-        const currentUnit =
-            activeChart === 'heart'
-                ? 'bpm'
-                : activeChart === 'bp'
-                    ? 'mmHg (收缩压)'
-                    : '%';
+    const currentStatusNormal =
+        activeChart === 'heart'
+            ? isHeartNormal
+            : activeChart === 'bp'
+                ? isPressureNormal
+                : isSpo2Normal;
 
-        const currentStatusNormal =
-            activeChart === 'heart'
-                ? isHeartNormal
-                : activeChart === 'bp'
-                    ? isPressureNormal
-                    : isSpo2Normal;
+    return (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex border-b border-slate-100">
+                <button
+                    onClick={() => setActiveChart('heart')}
+                    className={`flex-1 py-3.5 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                        activeChart === 'heart'
+                            ? 'text-rose-600 border-b-2 border-rose-500 bg-rose-50/60'
+                            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50/50'
+                    }`}
+                >
+                    <Heart size={15} /> 心率
+                </button>
+                <button
+                    onClick={() => setActiveChart('bp')}
+                    className={`flex-1 py-3.5 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                        activeChart === 'bp'
+                            ? 'text-indigo-600 border-b-2 border-indigo-500 bg-indigo-50/60'
+                            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50/50'
+                    }`}
+                >
+                    <Activity size={15} /> 血压
+                </button>
+                <button
+                    onClick={() => setActiveChart('spo2')}
+                    className={`flex-1 py-3.5 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                        activeChart === 'spo2'
+                            ? 'text-sky-600 border-b-2 border-sky-500 bg-sky-50/60'
+                            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50/50'
+                    }`}
+                >
+                    <Signal size={15} /> 血氧
+                </button>
+            </div>
 
-        return (
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="flex border-b border-slate-100">
-                    <button
-                        onClick={() => setActiveChart('heart')}
-                        className={`flex-1 py-3.5 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            <div className="p-5">
+                <div className="flex items-end gap-2 mb-4">
+                    <span
+                        className={`text-3xl font-bold tabular-nums ${
                             activeChart === 'heart'
-                                ? 'text-rose-600 border-b-2 border-rose-500 bg-rose-50/60'
-                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50/50'
+                                ? 'text-rose-600'
+                                : activeChart === 'bp'
+                                    ? 'text-indigo-600'
+                                    : 'text-sky-600'
                         }`}
                     >
-                        <Heart size={15} /> 心率
-                    </button>
-                    <button
-                        onClick={() => setActiveChart('bp')}
-                        className={`flex-1 py-3.5 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                            activeChart === 'bp'
-                                ? 'text-indigo-600 border-b-2 border-indigo-500 bg-indigo-50/60'
-                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50/50'
+                        {currentValue}
+                    </span>
+                    <span className="text-sm text-slate-400 mb-1">
+                        {currentUnit}
+                    </span>
+                    <div
+                        className={`ml-auto px-2.5 py-1 rounded-full text-xs font-medium border ${
+                            currentStatusNormal ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
                         }`}
                     >
-                        <Activity size={15} /> 血压
-                    </button>
-                    <button
-                        onClick={() => setActiveChart('spo2')}
-                        className={`flex-1 py-3.5 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                            activeChart === 'spo2'
-                                ? 'text-sky-600 border-b-2 border-sky-500 bg-sky-50/60'
-                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50/50'
-                        }`}
-                    >
-                        <Signal size={15} /> 血氧
-                    </button>
+                        {currentStatusNormal ? '正常' : '注意'}
+                    </div>
                 </div>
 
-                <div className="p-5">
-                    <div className="flex items-end gap-2 mb-4">
-                        <span
-                            className={`text-3xl font-bold tabular-nums ${
-                                activeChart === 'heart'
-                                    ? 'text-rose-600'
-                                    : activeChart === 'bp'
-                                        ? 'text-indigo-600'
-                                        : 'text-sky-600'
-                            }`}
-                        >
-                            {currentValue}
-                        </span>
-                        <span className="text-sm text-slate-400 mb-1">
-                            {currentUnit}
-                        </span>
-                        <div
-                            className={`ml-auto px-2.5 py-1 rounded-full text-xs font-medium border ${
-                                currentStatusNormal ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-                            }`}
-                        >
-                            {currentStatusNormal ? '正常' : '注意'}
-                        </div>
-                    </div>
-
-                    <div className="h-52 min-w-0">
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <div className="h-52 min-w-0">
+                    {chartReady ? (
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={208}>
                             <AreaChart data={data}>
                                 <defs>
                                     <linearGradient id="heartGrad" x1="0" y1="0" x2="0" y2="1">
@@ -554,7 +594,17 @@ const mockSleepData = [
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} interval={10} />
+                                <XAxis
+                                    dataKey="time"
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#94a3b8', fontSize: 10 }}
+                                    tickFormatter={formatRealtimeTickLabel}
+                                    ticks={xAxisTicks}
+                                    interval={0}
+                                    tickMargin={8}
+                                    minTickGap={20}
+                                />
                                 <YAxis
                                     axisLine={false}
                                     tickLine={false}
@@ -575,6 +625,7 @@ const mockSleepData = [
                                         boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                                         fontSize: '12px',
                                     }}
+                                    labelFormatter={(value) => `时间 ${formatRealtimeTickLabel(String(value))}`}
                                 />
                                 <Area
                                     type="monotone"
@@ -600,24 +651,1657 @@ const mockSleepData = [
                                 />
                             </AreaChart>
                         </ResponsiveContainer>
+                    ) : (
+                        <div className="h-full w-full rounded-2xl bg-slate-50 animate-pulse" />
+                    )}
+                </div>
+
+                <div className="flex items-center justify-between mt-3 px-1">
+                    <span className="text-xs text-slate-400">
+                        {activeChart === 'heart'
+                            ? '正常范围：60-100 bpm'
+                            : activeChart === 'bp'
+                                ? '正常范围：90-140 mmHg'
+                                : '正常范围：≥95%'}
+                    </span>
+                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <Signal size={10} /> 实时
+                    </span>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+interface DashboardSettingsViewProps {
+    onClose: () => void;
+}
+
+interface DashboardHealthTabProps {
+    currentMetrics: HealthMetrics;
+    activeAiTab: 'report' | 'cognitive';
+    setActiveAiTab: (tab: 'report' | 'cognitive') => void;
+    reportLoading: boolean;
+    reportContent: string | null;
+    generateReport: () => Promise<void>;
+    cognitiveLoading: boolean;
+    cognitiveBrief: CognitiveBrief | null;
+    cognitiveContent: string | null;
+    showHealthReportModal: boolean;
+    setShowHealthReportModal: (value: boolean) => void;
+    showCognitiveReportModal: boolean;
+    setShowCognitiveReportModal: (value: boolean) => void;
+}
+
+const DashboardSettingsView: React.FC<DashboardSettingsViewProps> = ({ onClose }) => {
+    const [cloneStep, setCloneStep] = useState<'idle' | 'recording' | 'processing' | 'done'>('idle');
+    const [voiceProgress, setVoiceProgress] = useState(0);
+    const [clonedVoiceName, setClonedVoiceName] = useState<string>('');
+    const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null);
+    const [recordingSeconds, setRecordingSeconds] = useState(0);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const recordingSecondsRef = useRef(0);
+    const [allVoices, setAllVoices] = useState<{ id: string; name: string; isCloned?: boolean }[]>([]);
+    const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(() =>
+        voiceSelectionService.getSelectedVoiceId()
+    );
+    const [openclawStatus, setOpenclawStatus] = useState<{
+        syncEnabled: boolean;
+        elderId?: string;
+        bridgeBaseUrl?: string;
+        bridgeHealthy?: boolean;
+        gatewayConfigured?: boolean;
+        loading: boolean;
+        error?: string;
+    }>({
+        syncEnabled: openclawSyncService.isEnabled(),
+        elderId: openclawSyncService.getElderId(),
+        bridgeBaseUrl: getOpenClawBridgeBaseUrl(),
+        bridgeHealthy: undefined,
+        gatewayConfigured: undefined,
+        loading: false,
+        error: undefined,
+    });
+    const [profile, setProfile] = useState<ElderlyProfile | null>(() => aiService.getProfile());
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [profileHint, setProfileHint] = useState<string | null>(null);
+
+    const loadVoices = async () => {
+        const all = await VoiceService.getAllVoices();
+        setAllVoices(all.map((v) => ({ id: v.id, name: v.name, isCloned: v.isCloned })));
+    };
+
+    useEffect(() => {
+        loadVoices();
+        const unsub = voiceSelectionService.subscribe((id) => setSelectedVoiceId(id));
+        return unsub;
+    }, []);
+
+    useEffect(() => {
+        const syncEnabled = openclawSyncService.isEnabled();
+        const elderId = openclawSyncService.getElderId();
+        const bridgeBaseUrl = getOpenClawBridgeBaseUrl();
+        setOpenclawStatus((prev) => ({
+            ...prev,
+            syncEnabled,
+            elderId,
+            bridgeBaseUrl,
+            loading: syncEnabled && !!bridgeBaseUrl,
+            error: undefined,
+        }));
+
+        if (!syncEnabled || !bridgeBaseUrl) {
+            return;
+        }
+
+        (async () => {
+            try {
+                const res = await fetch(`${bridgeBaseUrl}/healthz`, {
+                    headers: {
+                        ...(import.meta.env.VITE_OPENCLAW_BRIDGE_TOKEN
+                            ? { 'x-emobit-bridge-token': import.meta.env.VITE_OPENCLAW_BRIDGE_TOKEN as string }
+                            : {}),
+                    },
+                });
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+                const json = await res.json();
+                setOpenclawStatus((prev) => ({
+                    ...prev,
+                    loading: false,
+                    bridgeHealthy: !!json.ok,
+                    gatewayConfigured: !!json.gatewayConfigured,
+                }));
+            } catch (error) {
+                console.warn('[Settings] OpenClaw bridge health check failed:', error);
+                setOpenclawStatus((prev) => ({
+                    ...prev,
+                    loading: false,
+                    bridgeHealthy: false,
+                    gatewayConfigured: false,
+                    error: '无法连接到 EmoBit Bridge，请检查 `npm run openclaw:bridge` 是否已启动以及 Token 配置。',
+                }));
+            }
+        })();
+    }, []);
+
+    const handleGuardianFieldChange = (index: number, field: 'name' | 'relation' | 'phone', value: string) => {
+        setProfile((prev) => {
+            if (!prev) return prev;
+            const nextMembers = [...prev.familyMembers];
+            const current = nextMembers[index] || { name: '', relation: '家属', phone: '' };
+            nextMembers[index] = { ...current, [field]: value };
+            return { ...prev, familyMembers: nextMembers };
+        });
+    };
+
+    const handleAddGuardian = () => {
+        setProfile((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                familyMembers: [
+                    ...prev.familyMembers,
+                    { name: '', relation: '家属', phone: '' },
+                ],
+            };
+        });
+    };
+
+    const handleRemoveGuardian = (index: number) => {
+        setProfile((prev) => {
+            if (!prev) return prev;
+            const nextMembers = prev.familyMembers.filter((_, i) => i !== index);
+            return { ...prev, familyMembers: nextMembers };
+        });
+    };
+
+    const handleSaveGuardians = () => {
+        if (!profile) return;
+        setSavingProfile(true);
+        try {
+            aiService.setProfile(profile);
+            setProfileHint('已保存家属联系人，并同步到 OpenClaw bridge。');
+            setTimeout(() => setProfileHint(null), 2500);
+        } finally {
+            setSavingProfile(false);
+        }
+    };
+
+    const handleStartRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mr = new MediaRecorder(stream);
+            mediaRecorderRef.current = mr;
+            audioChunksRef.current = [];
+            recordingSecondsRef.current = 0;
+            setRecordingSeconds(0);
+
+            mr.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data);
+            };
+
+            mr.onstop = async () => {
+                stream.getTracks().forEach((t) => t.stop());
+                const raw = new Blob(audioChunksRef.current, {
+                    type: mr.mimeType || 'audio/webm',
+                });
+                try {
+                    const wav = await blobToWav(raw);
+                    setRecordedAudio(wav);
+                } catch (e) {
+                    console.error('转 WAV 失败', e);
+                    setRecordedAudio(raw);
+                }
+            };
+
+            mr.start();
+            setIsRecording(true);
+            setCloneStep('recording');
+            recordingTimerRef.current = setInterval(() => {
+                recordingSecondsRef.current += 1;
+                setRecordingSeconds(recordingSecondsRef.current);
+            }, 1000);
+        } catch (err) {
+            console.error('录音失败:', err);
+            alert('无法访问麦克风，请检查权限设置');
+        }
+    };
+
+    const handleStopRecording = () => {
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+        }
+        if (mediaRecorderRef.current && isRecording) {
+            const secs = recordingSecondsRef.current;
+            if (secs < MIN_VOICE_SAMPLE_SECONDS) {
+                alert(`请至少录制 ${MIN_VOICE_SAMPLE_SECONDS} 秒。当前 ${secs} 秒。`);
+                recordingSecondsRef.current = 0;
+                setRecordingSeconds(0);
+                return;
+            }
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            recordingSecondsRef.current = 0;
+            setRecordingSeconds(0);
+            setCloneStep('idle');
+        }
+    };
+
+    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('audio/')) {
+            alert('请选择音频文件（WAV/MP3 等）');
+            return;
+        }
+        try {
+            const dur = await getAudioDurationSeconds(file);
+            if (dur < MIN_VOICE_SAMPLE_SECONDS) {
+                alert(`音频时长至少 ${MIN_VOICE_SAMPLE_SECONDS} 秒，当前约 ${dur.toFixed(1)} 秒。`);
+                event.target.value = '';
+                return;
+            }
+        } catch (e) {
+            console.warn('无法解析音频时长，仍允许使用', e);
+        }
+        try {
+            const wav = await blobToWav(file);
+            setRecordedAudio(wav);
+        } catch (e) {
+            console.error('转 WAV 失败', e);
+            setRecordedAudio(file);
+        }
+        setCloneStep('idle');
+        event.target.value = '';
+    };
+
+    const handleSetAsCurrent = (id: string | null) => {
+        voiceSelectionService.setSelectedVoiceId(id);
+        setSelectedVoiceId(id);
+        VoiceService.preloadClonePhrases(id ?? undefined);
+    };
+
+    const handleStartVoiceClone = async () => {
+        if (!recordedAudio) {
+            fileInputRef.current?.click();
+            return;
+        }
+
+        console.log('[克隆] 开始流程, 音频大小:', recordedAudio.size);
+        setCloneStep('processing');
+        setVoiceProgress(0);
+
+        let progressInterval: ReturnType<typeof setInterval> | null = null;
+        try {
+            const voiceName = clonedVoiceName || `子女声音_${new Date().toLocaleDateString()}`;
+            progressInterval = setInterval(() => {
+                setVoiceProgress((prev) => {
+                    if (prev >= 90) return 90;
+                    return prev + 10;
+                });
+            }, 300);
+
+            console.log('[克隆] 调用 VoiceService.cloneVoice...');
+            const result = await VoiceService.cloneVoice(recordedAudio, voiceName);
+
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+            setVoiceProgress(100);
+            console.log('[克隆] 结果', result);
+
+            if (result.status === 'ready' && result.isCloned) {
+                setClonedVoiceId(result.id);
+                setCloneStep('done');
+                await loadVoices();
+                voiceSelectionService.setSelectedVoiceId(result.id);
+                setSelectedVoiceId(result.id);
+                VoiceService.preloadClonePhrases(result.id);
+                console.log('[克隆] 完成，已切换为当前音色');
+            } else if (result.status === 'failed') {
+                throw new Error('克隆失败');
+            } else {
+                console.warn('[克隆] 服务不可用，使用预设音色');
+                setCloneStep('idle');
+                setVoiceProgress(0);
+            }
+        } catch (e) {
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+            const msg = e instanceof Error ? e.message : '未知错误';
+            console.error('[克隆] 失败', e);
+            alert(`语音克隆失败：${msg}\n\n请确认：\n1. 已启动语音克隆服务 (./scripts/start_voice_clone.sh)\n2. 浏览器控制台与服务器日志中的报错信息`);
+            setCloneStep('idle');
+            setVoiceProgress(0);
+        }
+    };
+
+    const handlePreviewVoice = async () => {
+        if (!clonedVoiceId) return;
+
+        try {
+            await VoiceService.speak('你好，我是你的数字人助手', clonedVoiceId);
+        } catch (error) {
+            console.error('试听失败:', error);
+            alert('试听失败，请检查服务连接');
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-full bg-[#F8FAFC] animate-fade-in-up">
+            <div className="px-5 py-4 flex items-center justify-between sticky top-0 z-10 bg-[#F8FAFC]/90 backdrop-blur-sm">
+                <button
+                    onClick={onClose}
+                    className="p-2 -ml-2 text-slate-500 hover:text-slate-800 transition-colors"
+                >
+                    <ArrowLeft size={24} />
+                </button>
+                <h2 className="text-lg font-bold text-slate-800">系统设置</h2>
+                <div className="w-8"></div>
+            </div>
+
+            <div className="p-5 space-y-6 pb-20">
+                <div className="bg-gradient-to-br from-indigo-600 to-blue-600 rounded-[2rem] p-6 text-white shadow-xl shadow-indigo-200 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-40 h-40 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-3xl"></div>
+
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-white/20 rounded-lg backdrop-blur-md border border-white/20">
+                            <Mic size={20} className="text-yellow-300" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-lg leading-tight">AI 语音克隆</h3>
+                            <p className="text-[10px] text-indigo-100 opacity-80">Powered by Gemini Nano</p>
+                        </div>
                     </div>
 
-                    <div className="flex items-center justify-between mt-3 px-1">
-                        <span className="text-xs text-slate-400">
-                            {activeChart === 'heart'
-                                ? '正常范围：60-100 bpm'
-                                : activeChart === 'bp'
-                                    ? '正常范围：90-140 mmHg'
-                                    : '正常范围：≥95%'}
-                        </span>
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
-                            <Signal size={10} /> 实时
-                        </span>
+                    <p className="text-sm text-indigo-50 leading-relaxed mb-6 opacity-90">
+                        直接录音 ≥10 秒或上传 ≥10 秒音频（WAV/MP3），整合为一份样本后用于克隆。克隆一次即存为一个音色，可在下方切换使用。
+                    </p>
+
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="audio/*"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                    />
+
+                    {cloneStep === 'idle' && (
+                        <div className="space-y-3">
+                            <input
+                                type="text"
+                                placeholder="输入声音名称（如：女儿的声音）"
+                                value={clonedVoiceName}
+                                onChange={(e) => setClonedVoiceName(e.target.value)}
+                                className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30"
+                            />
+                            <div className="bg-white/10 rounded-xl p-1 backdrop-blur-sm border border-white/20 flex gap-1">
+                                <button
+                                    onClick={isRecording ? handleStopRecording : handleStartRecording}
+                                    className={`flex-1 py-3 rounded-lg font-bold text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-transform ${isRecording ? 'bg-rose-500 text-white' : 'bg-white text-indigo-600'
+                                        }`}
+                                >
+                                    <Mic size={16} />
+                                    {isRecording ? '停止录音' : '开始录音'}
+                                </button>
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="flex-1 bg-white/20 text-white py-3 rounded-lg font-bold text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-white/30"
+                                >
+                                    <Upload size={16} /> 上传文件
+                                </button>
+                            </div>
+                            {recordedAudio && (
+                                <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-xl p-3 flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-emerald-100 text-sm">
+                                        <CheckCircle size={16} />
+                                        已选择音频（≥10 秒）
+                                    </div>
+                                    <button
+                                        onClick={handleStartVoiceClone}
+                                        className="bg-white text-emerald-600 px-4 py-2 rounded-lg text-xs font-bold active:scale-95 transition-transform"
+                                    >
+                                        开始克隆
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {cloneStep === 'recording' && (
+                        <div className="flex flex-col items-center justify-center py-2">
+                            <div className="flex gap-1 h-8 items-center mb-2">
+                                {[1, 2, 3, 4, 5].map((i) => (
+                                    <div
+                                        key={i}
+                                        className="w-1.5 bg-white rounded-full animate-talk"
+                                        style={{
+                                            height: Math.random() * 20 + 10 + 'px',
+                                            animationDelay: i * 0.1 + 's',
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                            <p className="text-sm font-mono text-white tabular-nums">
+                                {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:
+                                {String(recordingSeconds % 60).padStart(2, '0')}
+                            </p>
+                            <p className="text-xs text-indigo-100 mt-1">
+                                至少 {MIN_VOICE_SAMPLE_SECONDS} 秒后可停止
+                            </p>
+                            <button
+                                onClick={handleStopRecording}
+                                disabled={recordingSeconds < MIN_VOICE_SAMPLE_SECONDS}
+                                className="mt-3 px-4 py-2 bg-rose-500 text-white rounded-lg text-xs font-bold active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                停止录音
+                            </button>
+                        </div>
+                    )}
+
+                    {cloneStep === 'processing' && (
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs font-medium opacity-80">
+                                <span>构建声纹模型</span>
+                                <span>{voiceProgress}%</span>
+                            </div>
+                            <div className="h-2 bg-black/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-white rounded-full transition-all duration-150" style={{ width: `${voiceProgress}%` }}></div>
+                            </div>
+                        </div>
+                    )}
+
+                    {cloneStep === 'done' && (
+                        <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-xl p-3 flex flex-col gap-3 animate-fade-in">
+                            <div className="flex items-center gap-2 text-emerald-100 text-sm font-bold">
+                                <CheckCircle size={16} className="text-emerald-300" />
+                                声音克隆完成！
+                            </div>
+                            <p className="text-xs text-emerald-100/80">已存为可切换音色，当前已设为使用中</p>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    onClick={handlePreviewVoice}
+                                    className="bg-white/10 hover:bg-white/20 text-white text-xs py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-1.5"
+                                >
+                                    <Play size={12} /> 试听效果
+                                </button>
+                                <button
+                                    onClick={() =>
+                                        VoiceService.speak(
+                                            '你好，我是你的数字人助手，很高兴为你服务',
+                                            clonedVoiceId || undefined
+                                        )
+                                    }
+                                    className="bg-white text-emerald-600 text-xs py-2 rounded-lg font-bold shadow-sm flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
+                                >
+                                    <Volume2 size={12} /> 发送问候
+                                </button>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setCloneStep('idle');
+                                    setRecordedAudio(null);
+                                    setClonedVoiceId(null);
+                                    setVoiceProgress(0);
+                                }}
+                                className="bg-white/10 hover:bg-white/20 text-white text-xs py-2 rounded-lg font-medium transition-colors"
+                            >
+                                克隆新声音
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="mt-4 pt-4 border-t border-white/20">
+                        <h4 className="text-xs font-bold text-indigo-100 uppercase tracking-wider mb-2">
+                            TTS 音色 · 可切换（Edge 预设 + 克隆）
+                        </h4>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                            {allVoices.map((v) => (
+                                <div
+                                    key={v.id}
+                                    className="flex items-center justify-between gap-2 bg-white/10 rounded-lg px-3 py-2"
+                                >
+                                    <span className="text-sm text-white truncate flex-1">
+                                        {v.name}
+                                        {v.isCloned && (
+                                            <span className="ml-1 text-[10px] text-amber-300">克隆</span>
+                                        )}
+                                        {(selectedVoiceId === v.id || (!selectedVoiceId && v.id === 'edge_xiaoyi')) && (
+                                            <span className="ml-1 text-[10px] text-emerald-300">当前使用</span>
+                                        )}
+                                    </span>
+                                    <div className="flex gap-1 shrink-0">
+                                        <button
+                                            onClick={() =>
+                                                VoiceService.speak('你好，我是你的数字人助手', v.id)
+                                            }
+                                            className="px-2 py-1 bg-white/20 text-white text-[10px] rounded hover:bg-white/30"
+                                        >
+                                            试听
+                                        </button>
+                                        <button
+                                            onClick={() => handleSetAsCurrent(v.id)}
+                                            className="px-2 py-1 bg-white/20 text-white text-[10px] rounded hover:bg-white/30"
+                                        >
+                                            设为当前
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider pl-1">通用设置</h4>
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
+                                <AlertCircle size={20} />
+                            </div>
+                            <div>
+                                <p className="font-bold text-slate-800 text-sm">跌倒自动报警</p>
+                            </div>
+                        </div>
+                        <ToggleRight size={28} className="text-indigo-600" />
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
+                                    <Link2 size={18} />
+                                </div>
+                                <div>
+                                    <p className="font-bold text-slate-800 text-sm">OpenClaw 同步</p>
+                                    <p className="text-[11px] text-slate-500">
+                                        {openclawStatus.syncEnabled
+                                            ? `已启用，elderId=${openclawStatus.elderId || '未配置'}`
+                                            : '未启用（检查 VITE_OPENCLAW_* 环境变量）'}
+                                    </p>
+                                </div>
+                            </div>
+                            <span
+                                className={`flex items-center text-[11px] font-semibold ${
+                                    openclawStatus.syncEnabled ? 'text-emerald-600' : 'text-slate-400'
+                                }`}
+                            >
+                                <span
+                                    className={`w-2 h-2 rounded-full mr-1 ${
+                                        openclawStatus.syncEnabled ? 'bg-emerald-500' : 'bg-slate-300'
+                                    }`}
+                                />
+                                {openclawStatus.syncEnabled ? 'ON' : 'OFF'}
+                            </span>
+                        </div>
+
+                        {openclawStatus.bridgeBaseUrl && (
+                            <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 space-y-1">
+                                <div className="flex items-center justify-between">
+                                    <span className="flex items-center gap-1">
+                                        <Wifi size={12} /> Bridge
+                                    </span>
+                                    <span
+                                        className={`flex items-center gap-1 ${
+                                            openclawStatus.loading
+                                                ? 'text-slate-400'
+                                                : openclawStatus.bridgeHealthy
+                                                    ? 'text-emerald-600'
+                                                    : 'text-rose-500'
+                                        }`}
+                                    >
+                                        <span
+                                            className={`w-2 h-2 rounded-full ${
+                                                openclawStatus.loading
+                                                    ? 'bg-slate-300'
+                                                    : openclawStatus.bridgeHealthy
+                                                        ? 'bg-emerald-500'
+                                                        : 'bg-rose-500'
+                                            }`}
+                                        />
+                                        {openclawStatus.loading
+                                            ? '检测中…'
+                                            : openclawStatus.bridgeHealthy
+                                                ? '已连接'
+                                                : '未连接'}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="flex items-center gap-1">
+                                        <Activity size={12} /> Gateway
+                                    </span>
+                                    <span
+                                        className={`${
+                                            openclawStatus.gatewayConfigured ? 'text-emerald-600' : 'text-slate-400'
+                                        }`}
+                                    >
+                                        {openclawStatus.gatewayConfigured ? '已配置' : '未知 / 未配置'}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 pt-1">
+                                    请先启动 `npm run openclaw:bridge`，并在 OpenClaw Gateway 中安装
+                                    EmoBit 插件、消息通道和 `@openclaw/voice-call`。
+                                </p>
+                                {openclawStatus.error && (
+                                    <p className="text-[10px] text-rose-500 pt-1">{openclawStatus.error}</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
+                                    <Users size={20} />
+                                </div>
+                                <div>
+                                    <p className="font-bold text-slate-800 text-sm">家属联系人</p>
+                                    <p className="text-[11px] text-slate-500">
+                                        这里配置的家属姓名与手机号会同步到 OpenClaw，用于消息通知与语音外呼。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {!profile ? (
+                            <p className="text-xs text-slate-500">
+                                当前尚未加载老人档案，请先在老人端完成基础资料配置。
+                            </p>
+                        ) : (
+                            <>
+                                <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                                    {profile.familyMembers.map((member, index) => (
+                                        <div
+                                            key={`${member.name || 'guardian'}_${index}`}
+                                            className="flex items-center gap-2"
+                                        >
+                                            <input
+                                                className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs"
+                                                placeholder="姓名"
+                                                value={member.name}
+                                                onChange={(e) =>
+                                                    handleGuardianFieldChange(index, 'name', e.target.value)
+                                                }
+                                            />
+                                            <input
+                                                className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs"
+                                                placeholder="关系"
+                                                value={member.relation}
+                                                onChange={(e) =>
+                                                    handleGuardianFieldChange(index, 'relation', e.target.value)
+                                                }
+                                            />
+                                            <input
+                                                className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 text-xs"
+                                                placeholder="手机号"
+                                                value={member.phone || ''}
+                                                onChange={(e) =>
+                                                    handleGuardianFieldChange(index, 'phone', e.target.value)
+                                                }
+                                            />
+                                            <button
+                                                onClick={() => handleRemoveGuardian(index)}
+                                                className="p-1 text-slate-400 hover:text-rose-500"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex items-center justify-between pt-2">
+                                    <button
+                                        onClick={handleAddGuardian}
+                                        className="flex items-center gap-1 text-[11px] text-indigo-600 font-semibold"
+                                    >
+                                        <Plus size={14} /> 添加联系人
+                                    </button>
+                                    <button
+                                        onClick={handleSaveGuardians}
+                                        disabled={savingProfile}
+                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-[11px] font-bold rounded-lg"
+                                    >
+                                        {savingProfile ? '保存中…' : '保存并同步'}
+                                    </button>
+                                </div>
+                                {profileHint && (
+                                    <p className="text-[11px] text-emerald-600 pt-1 flex items-center gap-1">
+                                        <CheckCircle size={12} /> {profileHint}
+                                    </p>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                <button className="w-full py-4 text-center text-rose-500 text-sm font-bold bg-rose-50 rounded-2xl border border-rose-100 hover:bg-rose-100 transition-colors">
+                    退出登录
+                </button>
+            </div>
+            <style>{`
+                .animate-progress-indeterminate { animation: progressIndeterminate 1.5s infinite linear; }
+                @keyframes progressIndeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+            `}</style>
+        </div>
+    );
+};
+
+const DashboardHealthTab: React.FC<DashboardHealthTabProps> = ({
+    currentMetrics,
+    activeAiTab,
+    setActiveAiTab,
+    reportLoading,
+    reportContent,
+    generateReport,
+    cognitiveLoading,
+    cognitiveBrief,
+    cognitiveContent,
+    showHealthReportModal,
+    setShowHealthReportModal,
+    showCognitiveReportModal,
+    setShowCognitiveReportModal,
+}) => {
+    const totalSleepHours = mockSleepData.reduce((acc, d) => (d.name === '深睡' || d.name === '浅睡') ? acc + d.hours : acc, 0);
+    const deepSleepHours = mockSleepData.find((d) => d.name === '深睡')?.hours ?? 0;
+    const lightSleepHours = mockSleepData.find((d) => d.name === '浅睡')?.hours ?? 0;
+    const awakeHours = mockSleepData.find((d) => d.name === '清醒')?.hours ?? 0;
+    const deepRatio = totalSleepHours > 0 ? deepSleepHours / totalSleepHours : 0;
+    const sleepMinutes = Math.round(totalSleepHours * 60);
+    const displayHours = Math.floor(sleepMinutes / 60);
+    const displayMins = sleepMinutes % 60;
+    const sleepDisplay = `${displayHours}小时 ${displayMins > 0 ? displayMins + '分' : '0分'}`;
+    const heartRate = currentMetrics.heartRate;
+    const bloodPressure = currentMetrics.bloodPressure;
+    const bloodOxygen = currentMetrics.bloodOxygen;
+
+    const sleepScore = useMemo(() => {
+        let s = 60;
+        if (totalSleepHours >= 7 && totalSleepHours <= 9) s += 20;
+        else if (totalSleepHours >= 6 && totalSleepHours < 7) s += 10;
+        else if (totalSleepHours < 5) s -= 15;
+        if (deepRatio >= 0.25 && deepRatio <= 0.45) s += 15;
+        else if (deepRatio >= 0.2) s += 5;
+        return Math.min(98, Math.max(55, s));
+    }, [totalSleepHours, deepRatio]);
+
+    const isHeartNormal = heartRate >= 60 && heartRate <= 100;
+    const isBpHigh = bloodPressure.systolic >= 140 || bloodPressure.diastolic >= 90;
+    const isBpBorderline = !isBpHigh && (bloodPressure.systolic >= 130 || bloodPressure.diastolic >= 85);
+    const isBpNormal = !isBpHigh && !isBpBorderline;
+    const isSpo2Normal = bloodOxygen >= 95;
+    const isSleepGood = sleepScore >= 80;
+    const isSleepBorderline = !isSleepGood && sleepScore >= 70;
+
+    type HealthAlert = {
+        key: string;
+        title: string;
+        value: string;
+        normalRange: string;
+        message: string;
+        color: 'rose' | 'amber' | 'sky' | 'indigo';
+    };
+
+    const alerts: HealthAlert[] = [];
+
+    if (!isHeartNormal) {
+        alerts.push({
+            key: 'heart',
+            title: heartRate > 100 ? '心率偏快' : '心率偏慢',
+            value: `${heartRate} bpm`,
+            normalRange: '60-100 bpm',
+            message: heartRate > 100
+                ? '心率略快，可提醒爸爸稍作休息，避免剧烈运动，如持续心悸不适建议就医评估。'
+                : '心率偏慢，如伴有头晕乏力、胸闷气短等症状，建议尽快就医评估心功能。',
+            color: 'rose',
+        });
+    }
+
+    if (!isBpNormal) {
+        alerts.push({
+            key: 'bp',
+            title: isBpHigh ? '血压偏高' : '血压临界偏高',
+            value: `${bloodPressure.systolic}/${bloodPressure.diastolic} mmHg`,
+            normalRange: '90-120 / 60-80 mmHg',
+            message: isBpHigh
+                ? '血压已明显高于正常范围，建议密切观察，如反复偏高或伴头痛胸闷等不适，请及时就医。'
+                : '血压略高，属于临界范围，可提醒爸爸清淡饮食、适度运动，注意作息并定期复测。',
+            color: 'amber',
+        });
+    }
+
+    if (!isSpo2Normal) {
+        alerts.push({
+            key: 'spo2',
+            title: '血氧偏低',
+            value: `${bloodOxygen}%`,
+            normalRange: '≥95%',
+            message: '血氧饱和度略低，如持续低于 93% 或出现明显气促、胸闷等，请尽快就医评估心肺功能。',
+            color: 'sky',
+        });
+    }
+
+    if (!isSleepGood && !isSleepBorderline) {
+        alerts.push({
+            key: 'sleep',
+            title: '睡眠质量偏低',
+            value: `${sleepScore} 分`,
+            normalRange: '良好 ≥ 80 分',
+            message: '昨夜睡眠时长和深睡比例偏少，可帮助爸爸调整作息，避免晚间浓茶咖啡和长时间看屏幕，如长期失眠建议就医。',
+            color: 'indigo',
+        });
+    }
+
+    const hasAttention = alerts.length > 0;
+
+    const { sleepDescription } = useMemo(() => {
+        const deepPct = Math.round(deepRatio * 100);
+        let description: string;
+        let tipsOrAffirmation: string;
+
+        if (totalSleepHours >= 7 && deepRatio >= 0.25) {
+            description = `昨日共睡 ${displayHours} 小时${displayMins > 0 ? ' ' + displayMins + ' 分' : ''}，其中深睡 ${deepSleepHours} 小时、浅睡 ${lightSleepHours} 小时。深睡占比约 ${deepPct}%，睡眠时长与结构均良好。`;
+            tipsOrAffirmation = `睡眠情况良好，时长与深睡占比都不错，子女可放心。请继续保持规律作息与良好习惯。`;
+        } else if (totalSleepHours >= 6) {
+            description = `昨日共睡 ${displayHours} 小时${displayMins > 0 ? ' ' + displayMins + ' 分' : ''}，其中深睡 ${deepSleepHours} 小时、浅睡 ${lightSleepHours} 小时${awakeHours > 0 ? '，夜间清醒约 ' + awakeHours + ' 小时' : ''}。深睡占比约 ${deepPct}%，整体尚可，仍有优化空间。`;
+            tipsOrAffirmation = `改善建议（子女可协助）：固定就寝与起床时间；白天适度活动、傍晚避免剧烈运动；睡前 1 小时避免屏幕与咖啡因；午睡不超过 30 分钟；卧室保持安静、昏暗。若持续入睡困难或早醒，可考虑就医排查睡眠障碍。`;
+        } else {
+            description = `昨日共睡 ${displayHours} 小时${displayMins > 0 ? ' ' + displayMins + ' 分' : ''}，其中深睡 ${deepSleepHours} 小时、浅睡 ${lightSleepHours} 小时${awakeHours > 0 ? '，夜间清醒约 ' + awakeHours + ' 小时' : ''}。睡眠时长偏少，深睡占比约 ${deepPct}%。`;
+            tipsOrAffirmation = `改善建议（子女可协助）：固定就寝与起床时间，即使睡得晚也尽量同一时间起床；白天多接触自然光、适度活动；睡前避免饱餐、酒精与咖啡因；减少午睡或控制在 20 分钟内；睡前可做放松活动（如温水泡脚、听轻音乐）。若长期睡眠不足或日间困倦明显，建议到睡眠门诊或神经内科评估。`;
+        }
+        return { sleepDescription: description, sleepTipsOrAffirmation: tipsOrAffirmation };
+    }, [totalSleepHours, deepRatio, deepSleepHours, lightSleepHours, awakeHours, displayHours, displayMins]);
+
+    return (
+        <div className="flex flex-col gap-5 p-4 pb-24 animate-fade-in-up bg-slate-50/80">
+            {hasAttention ? (
+                <>
+                    <div className="bg-amber-50 border border-amber-200 px-4 py-4 rounded-3xl shadow-sm">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-2xl bg-amber-100 flex items-center justify-center">
+                                    <AlertTriangle size={18} className="text-amber-600" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-slate-800">需要您关注</p>
+                                    <p className="text-[11px] text-slate-600">
+                                        共 {alerts.length} 项指标超出理想范围，系统已为您整理说明与建议。
+                                    </p>
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-slate-500">手环在线 · 实时监测</p>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                            <span>同步于 {new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span className="font-medium text-amber-700">{alerts.length} 项提醒</span>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        {alerts.map((alert) => {
+                            const bg =
+                                alert.color === 'rose'
+                                    ? 'bg-rose-50 border-rose-100'
+                                    : alert.color === 'amber'
+                                        ? 'bg-amber-50 border-amber-100'
+                                        : alert.color === 'sky'
+                                            ? 'bg-sky-50 border-sky-100'
+                                            : 'bg-indigo-50 border-indigo-100';
+                            const dot =
+                                alert.color === 'rose'
+                                    ? 'bg-rose-400'
+                                    : alert.color === 'amber'
+                                        ? 'bg-amber-400'
+                                        : alert.color === 'sky'
+                                            ? 'bg-sky-400'
+                                            : 'bg-indigo-400';
+                            const valueColor =
+                                alert.color === 'rose'
+                                    ? 'text-rose-600'
+                                    : alert.color === 'amber'
+                                        ? 'text-amber-600'
+                                        : alert.color === 'sky'
+                                            ? 'text-sky-600'
+                                            : 'text-indigo-600';
+
+                            return (
+                                <div key={alert.key} className={`${bg} border rounded-3xl p-4 shadow-sm`}>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
+                                            <p className="text-sm font-semibold text-slate-800">{alert.title}</p>
+                                        </div>
+                                        <span className="text-[11px] text-slate-500">
+                                            {new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 mb-3">
+                                        <div className="bg-white/80 rounded-2xl px-3 py-2.5 border border-slate-100">
+                                            <p className="text-[11px] text-slate-500 mb-1">当前检测值</p>
+                                            <p className={`text-xl font-bold tabular-nums ${valueColor}`}>{alert.value}</p>
+                                        </div>
+                                        <div className="bg-white/80 rounded-2xl px-3 py-2.5 border border-slate-100">
+                                            <p className="text-[11px] text-slate-500 mb-1">参考正常范围</p>
+                                            <p className="text-sm font-semibold text-slate-700">{alert.normalRange}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/80 rounded-2xl px-3 py-2.5 mb-2 border border-slate-100">
+                                        <p className="text-xs text-slate-600 leading-relaxed">
+                                            {alert.message}
+                                        </p>
+                                    </div>
+                                    <button className="text-xs text-slate-600 font-medium hover:text-slate-800">
+                                        查看该指标历史趋势 &gt;
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </>
+            ) : (
+                <div className="bg-white border border-emerald-100 rounded-3xl p-4 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-8 -mt-8" />
+                    <div className="relative z-10 flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                            <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
+                                <ShieldCheck size={18} className="text-emerald-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-slate-800">今日暂无线索需特别关注</p>
+                                <p className="text-[11px] text-slate-600">生命体征整体稳定，请继续保持良好作息</p>
+                            </div>
+                        </div>
+                        <p className="text-[11px] text-slate-500">{new Date().toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}</p>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex items-center gap-2 px-1 mt-1">
+                <h3 className="text-base font-bold text-slate-800">实时体征监测</h3>
+                <div className="flex-1 h-px bg-slate-200/80"></div>
+            </div>
+
+            <RealTimeHealthCharts metrics={currentMetrics} />
+
+            <div className="flex items-center gap-2 px-1 mt-1">
+                <h3 className="text-base font-bold text-slate-800">昨夜睡眠</h3>
+                <div className="flex-1 h-px bg-slate-200/80"></div>
+                <button type="button" className="text-xs font-medium text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5">
+                    查看详情 <ChevronRight size={14} className="inline" />
+                </button>
+            </div>
+
+            <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-gray-100/80">
+                <div
+                    className="p-4 text-white relative overflow-hidden"
+                    style={{ background: 'linear-gradient(135deg, #4338CA 0%, #6366F1 50%, #818CF8 100%)' }}
+                >
+                    <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-white/10" />
+                    <div className="relative flex items-center justify-between">
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <Moon className="w-4 h-4 text-white/80" />
+                                <span className="text-[12px] text-white/70">
+                                    入睡 22:30 — 起床 05:30
+                                </span>
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-[28px] font-extrabold leading-none">{sleepDisplay}</span>
+                            </div>
+                            <div className="flex items-center gap-1 mt-1.5">
+                                <ArrowUpRight className="w-3 h-3 text-[#A5F3FC]" />
+                                <span className="text-[11px] text-[#A5F3FC]">较前一晚 +0.5h</span>
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <div className="relative">
+                                <svg width="56" height="56" viewBox="0 0 56 56">
+                                    <circle cx="28" cy="28" r="23" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="5" />
+                                    <circle
+                                        cx="28"
+                                        cy="28"
+                                        r="23"
+                                        fill="none"
+                                        stroke="#FFFFFF"
+                                        strokeWidth="5"
+                                        strokeDasharray={`${(sleepScore / 100) * 144.5} 144.5`}
+                                        strokeLinecap="round"
+                                        transform="rotate(-90 28 28)"
+                                    />
+                                </svg>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span className="text-white" style={{ fontSize: '18px', fontWeight: 800, lineHeight: 1 }}>
+                                        {sleepScore}
+                                    </span>
+                                </div>
+                            </div>
+                            <span className="text-[10px] text-white/60 mt-1">
+                                {sleepScore >= 90 ? '优秀' : sleepScore >= 70 ? '一般' : '较差'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-4">
+                    <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-[11px] text-gray-400">睡眠阶段分布</p>
+                        <div className="flex gap-3">
+                            <div className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#3730A3' }} />
+                                <span className="text-[10px] text-gray-400">深睡</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#818CF8' }} />
+                                <span className="text-[10px] text-gray-400">浅睡</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#C4B5FD' }} />
+                                <span className="text-[10px] text-gray-400">REM</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex gap-[2px] mb-4 h-6 rounded-lg overflow-hidden">
+                        {[
+                            { type: 'light', w: 12 },
+                            { type: 'deep', w: 18 },
+                            { type: 'light', w: 8 },
+                            { type: 'rem', w: 10 },
+                            { type: 'deep', w: 16 },
+                            { type: 'light', w: 14 },
+                            { type: 'rem', w: 8 },
+                            { type: 'light', w: 14 },
+                        ].map((block, i) => {
+                            const colorMap: Record<string, string> = {
+                                deep: '#3730A3',
+                                light: '#818CF8',
+                                rem: '#C4B5FD',
+                            };
+                            return (
+                                <div
+                                    key={i}
+                                    className="h-full rounded-sm"
+                                    style={{ width: `${block.w}%`, backgroundColor: colorMap[block.type] }}
+                                />
+                            );
+                        })}
+                    </div>
+
+                    {(() => {
+                        const totalH = totalSleepHours || 1;
+                        const stages = [
+                            { label: '深睡', hours: deepSleepHours, color: '#3730A3', desc: '充足' },
+                            { label: '浅睡', hours: lightSleepHours, color: '#818CF8', desc: '正常' },
+                            { label: 'REM', hours: awakeHours, color: '#C4B5FD', desc: '正常' },
+                        ];
+                        return (
+                            <div className="flex gap-2 mb-3">
+                                {stages.map((stage) => (
+                                    <div key={stage.label} className="flex-1 bg-gray-50 rounded-xl p-2.5">
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <span className="text-[12px] text-gray-500">{stage.label}</span>
+                                            <span
+                                                className="text-[10px] px-1.5 py-0.5 rounded-md"
+                                                style={{
+                                                    backgroundColor: `${stage.color}10`,
+                                                    color: stage.color,
+                                                    fontWeight: 500,
+                                                }}
+                                            >
+                                                {stage.desc}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-baseline justify-between">
+                                            <span style={{ fontSize: '16px', fontWeight: 700, color: stage.color }}>
+                                                {stage.hours}h
+                                            </span>
+                                            <span className="text-[11px] text-gray-400">
+                                                {Math.round((stage.hours / totalH) * 100)}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })()}
+
+                    <div className="bg-[#F0FDF4] rounded-xl px-3 py-2.5 flex items-start gap-2">
+                        <span className="text-[13px] mt-0.5">💡</span>
+                        <p className="text-[12px] text-[#166534] leading-relaxed">
+                            {sleepDescription}
+                        </p>
                     </div>
                 </div>
             </div>
-        );
+
+            <div className="flex items-center gap-2 px-1 mt-1">
+                <h3 className="text-base font-bold text-[#1C2A3A]">AI 智能分析</h3>
+                <span
+                    className="px-2 py-0.5 rounded-md text-[9px] font-semibold text-white"
+                    style={{ background: 'linear-gradient(135deg, #3478F6, #5856D6)' }}
+                >
+                    AI
+                </span>
+                <div className="flex-1 h-px bg-slate-200/80"></div>
+            </div>
+
+            <div className="bg-white rounded-3xl border border-black/5 shadow-sm overflow-hidden">
+                <div className="bg-[#ECEEF3] rounded-xl mx-3 mt-3 mb-2 p-1 flex gap-1">
+                    <button
+                        onClick={() => setActiveAiTab('report')}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] transition-all ${
+                            activeAiTab === 'report' ? 'bg-white shadow-sm text-[#1C2A3A]' : 'text-[#98A5B3]'
+                        }`}
+                        style={activeAiTab === 'report' ? { fontWeight: 600 } : {}}
+                    >
+                        <FileText className="w-3.5 h-3.5" />
+                        健康日报
+                    </button>
+                    <button
+                        onClick={() => setActiveAiTab('cognitive')}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] transition-all ${
+                            activeAiTab === 'cognitive' ? 'bg-white shadow-sm text-[#1C2A3A]' : 'text-[#98A5B3]'
+                        }`}
+                        style={activeAiTab === 'cognitive' ? { fontWeight: 600 } : {}}
+                    >
+                        <Brain className="w-3.5 h-3.5" />
+                        认知评估
+                    </button>
+                </div>
+
+                <div className="p-4 pt-2">
+                    {activeAiTab === 'report' ? (
+                        <div className="bg-white rounded-2xl overflow-hidden shadow-[0_1px_8px_rgba(0,0,0,0.04)] border border-black/[0.04]">
+                            <div
+                                className="p-4 relative overflow-hidden"
+                                style={{ background: 'linear-gradient(135deg, #4338CA 0%, #6366F1 50%, #818CF8 100%)' }}
+                            >
+                                <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-white/10" />
+                                <div className="absolute bottom-2 right-16 w-8 h-8 rounded-full bg-white/5" />
+
+                                <div className="relative flex items-start gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                                        <Sparkles className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-white" style={{ fontSize: '15px', fontWeight: 700 }}>
+                                            爸爸的健康日报
+                                        </h3>
+                                        <p className="text-white/60 text-[11px] mt-0.5">
+                                            综合体征数据 + 认知交互记录分析生成
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-4">
+                                {reportLoading && (
+                                    <div className="flex flex-col items-center justify-center py-6">
+                                        <Loader2 size={24} className="animate-spin mb-2 text-white" />
+                                        <p className="text-[11px] text-white/80">正在生成今日健康日报…</p>
+                                    </div>
+                                )}
+
+                                {!reportContent && !reportLoading && (
+                                    <div className="flex flex-col items-center justify-center py-6">
+                                        <p className="text-[11px] text-white/80">即将生成…</p>
+                                    </div>
+                                )}
+
+                                {reportContent && !reportLoading && (() => {
+                                    const isError = reportContent.includes('出错') || reportContent.includes('失败');
+                                    if (isError) {
+                                        return (
+                                            <div className="space-y-3">
+                                                <p className="text-[11px] text-white/90">{reportContent}</p>
+                                                <button
+                                                    onClick={() => generateReport()}
+                                                    className="w-full h-9 rounded-2xl text-white text-xs font-semibold flex items-center justify-center gap-1 active:scale-[0.98] transition-all"
+                                                    style={{ background: 'linear-gradient(135deg, #3478F6 0%, #5856D6 100%)' }}
+                                                >
+                                                    重新生成健康日报
+                                                </button>
+                                            </div>
+                                        );
+                                    }
+                                    const { overall, pointsToNote, familySuggestions } = parseHealthBriefSections(reportContent);
+                                    return (
+                                        <div className="space-y-3">
+                                            <div className="bg-white rounded-2xl p-4 text-[#1C2A3A] space-y-4 border border-black/[0.04] shadow-sm">
+                                                {overall && (
+                                                    <div className="flex gap-3">
+                                                        <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                                                            <ShieldCheck className="text-emerald-600" size={16} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[13px] mb-1" style={{ fontWeight: 600 }}>
+                                                                整体评估
+                                                            </p>
+                                                            <div className="report-markdown text-[12px] leading-relaxed text-[#5E6C7B]">
+                                                                <ReactMarkdown>{overall}</ReactMarkdown>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {pointsToNote && (
+                                                    <div className="flex gap-3">
+                                                        <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
+                                                            <TrendingUp className="text-amber-600" size={16} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[13px] mb-1" style={{ fontWeight: 600 }}>
+                                                                需要留意
+                                                            </p>
+                                                            <div className="report-markdown text-[12px] leading-relaxed text-[#5E6C7B]">
+                                                                <ReactMarkdown>{pointsToNote}</ReactMarkdown>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {familySuggestions && (
+                                                    <div className="flex gap-3">
+                                                        <div className="w-8 h-8 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
+                                                            <Heart className="text-sky-600" size={16} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[13px] mb-1" style={{ fontWeight: 600 }}>
+                                                                亲情建议
+                                                            </p>
+                                                            <div className="report-markdown text-[12px] leading-relaxed text-[#5E6C7B]">
+                                                                <ReactMarkdown>{familySuggestions}</ReactMarkdown>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={() => setShowHealthReportModal(true)}
+                                                className="w-full h-10 rounded-xl text-white text-[12px] flex items-center justify-center gap-1 active:scale-[0.98] transition-all"
+                                                style={{ background: 'linear-gradient(135deg, #3478F6 0%, #5856D6 100%)' }}
+                                            >
+                                                查看完整报告 <ChevronRight className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-emerald-50/90 rounded-2xl border border-emerald-200 overflow-hidden">
+                            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                                <div className="flex items-center gap-2">
+                                    <Brain className="text-emerald-600" size={20} />
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-800">爸爸的认知评估</p>
+                                        <p className="text-[11px] text-slate-600">基于日常对话的NLP 智能分析</p>
+                                    </div>
+                                </div>
+                                {cognitiveBrief && (
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-12 h-12 rounded-full bg-emerald-500 border-2 border-emerald-400 flex items-center justify-center text-white font-bold text-lg">
+                                            {cognitiveBrief.overallScore}
+                                        </div>
+                                        <p className="text-[10px] text-slate-600 mt-0.5">综合分</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {!cognitiveBrief && (
+                                <div className="flex flex-col items-center justify-center py-10">
+                                    <Loader2 size={24} className="animate-spin mb-2 text-emerald-500" />
+                                    <p className="text-[11px] text-slate-500">正在生成认知评估报告…</p>
+                                </div>
+                            )}
+
+                            {cognitiveBrief && !cognitiveLoading && (
+                                <div className="px-4 pb-4 space-y-3">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {cognitiveBrief.dimensions.map((d) => {
+                                            const colorMap: Record<string, { bg: string; text: string; bar: string }> = {
+                                                semantic: { bg: 'bg-emerald-100', text: 'text-emerald-700', bar: 'bg-emerald-500' },
+                                                vocabulary: { bg: 'bg-sky-100', text: 'text-sky-700', bar: 'bg-sky-500' },
+                                                emotion: { bg: 'bg-amber-100', text: 'text-amber-700', bar: 'bg-amber-500' },
+                                                memory: { bg: 'bg-violet-100', text: 'text-violet-700', bar: 'bg-violet-500' },
+                                            };
+                                            const c = colorMap[d.id] || colorMap.semantic;
+                                            const Icon = d.id === 'semantic' ? Brain : d.id === 'vocabulary' ? BookOpen : d.id === 'emotion' ? MessageCircle : Link2;
+                                            return (
+                                                <div key={d.id} className="bg-white rounded-xl p-2.5 shadow-sm border border-slate-100">
+                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                        <Icon size={14} className={c.text} />
+                                                        <span className="text-[11px] font-medium text-slate-700">{d.name}</span>
+                                                    </div>
+                                                    <p className={`text-[11px] font-semibold ${c.text}`}>{d.status} {d.score}</p>
+                                                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mt-1">
+                                                        <div className={`h-full rounded-full ${c.bar}`} style={{ width: `${d.score}%` }} />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
+                                        <div className="bg-violet-50 px-3 py-1.5 flex items-center gap-1.5">
+                                            <MessageCircle size={14} className="text-violet-600" />
+                                            <span className="text-xs font-semibold text-slate-800">近期交互评估</span>
+                                        </div>
+                                        <p className="px-3 py-2 text-[11px] leading-relaxed text-slate-600">
+                                            {cognitiveBrief.recentInteractionEvaluation}
+                                        </p>
+                                    </div>
+                                    <div className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
+                                        <div className="bg-sky-50 px-3 py-1.5 flex items-center gap-1.5">
+                                            <Heart size={14} className="text-sky-600" />
+                                            <span className="text-xs font-semibold text-slate-800">陪伴建议</span>
+                                        </div>
+                                        <p className="px-3 py-2 text-[11px] leading-relaxed text-slate-600">
+                                            {cognitiveBrief.accompanyingSuggestions}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowCognitiveReportModal(true)}
+                                        className="w-full h-10 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                                    >
+                                        <Brain size={14} />
+                                        查看详细认知报告
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {showHealthReportModal && (
+                <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40">
+                    <div className="w-full max-w-sm mx-auto px-3">
+                        <div className="bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
+                            <div className="bg-gradient-to-br from-indigo-500 to-violet-500 px-5 pt-5 pb-4 text-white relative">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div>
+                                        <p className="text-xs opacity-90">
+                                            {new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
+                                        </p>
+                                        <p className="text-lg font-bold mt-1">爸爸的健康日报</p>
+                                        <p className="text-[11px] text-indigo-100/80">基于今日全天体征数据综合分析</p>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <button
+                                            onClick={() => setShowHealthReportModal(false)}
+                                            className="w-7 h-7 rounded-full bg-white/15 flex items-center justify-center"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
+                                {reportLoading && (
+                                    <div className="flex flex-col items-center justify-center py-10 text-slate-500 text-sm">
+                                        <Loader2 className="animate-spin mb-3 text-indigo-500" size={28} />
+                                        正在生成完整健康日报…
+                                    </div>
+                                )}
+                                {!reportLoading && reportContent && (
+                                    <div className="bg-white rounded-2xl p-4 shadow-sm">
+                                        <div className="report-markdown font-sans text-sm leading-relaxed text-slate-800">
+                                            <ReactMarkdown>{reportContent}</ReactMarkdown>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showCognitiveReportModal && (
+                <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40">
+                    <div className="w-full max-w-sm mx-auto px-3">
+                        <div className="bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
+                            <div className="bg-gradient-to-br from-emerald-500 to-sky-500 px-5 pt-5 pb-4 text-white relative">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div>
+                                        <p className="text-xs opacity-90">
+                                            {new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
+                                        </p>
+                                        <p className="text-lg font-bold mt-1">爸爸的认知评估</p>
+                                        <p className="text-[11px] text-emerald-100/80">基于今日对话的 NLP 深度分析</p>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <button
+                                            onClick={() => setShowCognitiveReportModal(false)}
+                                            className="w-7 h-7 rounded-full bg-white/15 flex items-center justify-center"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
+                                {cognitiveLoading && (
+                                    <div className="flex flex-col items-center justify-center py-10 text-slate-500 text-sm">
+                                        <Loader2 className="animate-spin mb-3 text-emerald-500" size={28} />
+                                        正在生成认知评估报告…
+                                    </div>
+                                )}
+                                {!cognitiveLoading && cognitiveContent && (
+                                    <div className="bg-white rounded-2xl p-4 shadow-sm">
+                                        <div className="report-markdown font-sans text-sm leading-relaxed text-slate-800">
+                                            <ReactMarkdown>{cognitiveContent}</ReactMarkdown>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showHealthReportModal && reportContent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+                    <div className="w-[92%] max-w-md max-h-[90vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+                        <div className="bg-gradient-to-br from-violet-500 to-indigo-500 px-5 pt-4 pb-3 text-white relative">
+                            <div className="flex justify-between items-start mb-3">
+                                <div>
+                                    <p className="text-xs opacity-80">
+                                        {new Date().toLocaleDateString('zh-CN', {
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric',
+                                            weekday: 'long',
+                                        })}
+                                    </p>
+                                    <p className="mt-1 text-base font-bold">爸爸的健康日报</p>
+                                    <p className="text-[11px] text-indigo-100/80">
+                                        基于今天全天体征数据综合分析
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setShowHealthReportModal(false)}
+                                    className="w-7 h-7 flex items-center justify-center rounded-full bg-white/15 text-white/90 hover:bg-white/25"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="px-5 py-4 overflow-y-auto">
+                            <div className="report-markdown font-sans text-[13px] leading-relaxed text-slate-800 [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-3 [&_h2:first-child]:mt-0 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5 [&_strong]:font-semibold">
+                                <ReactMarkdown>{reportContent}</ReactMarkdown>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showCognitiveReportModal && cognitiveContent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+                    <div className="w-[92%] max-w-md max-h-[90vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+                        <div className="bg-gradient-to-br from-emerald-500 to-teal-500 px-5 pt-4 pb-3 text-white relative">
+                            <div className="flex justify-between items-start mb-3">
+                                <div>
+                                    <p className="text-xs opacity-80">
+                                        {new Date().toLocaleDateString('zh-CN', {
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric',
+                                            weekday: 'long',
+                                        })}
+                                    </p>
+                                    <p className="mt-1 text-base font-bold">爸爸的认知评估</p>
+                                    <p className="text-[11px] text-emerald-100/80">
+                                        基于今日对话的 NLP 深度分析
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setShowCognitiveReportModal(false)}
+                                    className="w-7 h-7 flex items-center justify-center rounded-full bg-white/15 text-white/90 hover:bg-white/25"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="px-5 py-4 overflow-y-auto">
+                            <div className="report-markdown font-sans text-[13px] leading-relaxed text-slate-800 [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-3 [&_h2:first-child]:mt-0 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5 [&_strong]:font-semibold">
+                                <ReactMarkdown>{cognitiveContent}</ReactMarkdown>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const DashboardFaceAlbumTab: React.FC = () => {
+    const [faces, setFaces] = useState<FaceData[]>(() => faceService.getFaces());
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [form, setForm] = useState({
+        name: '',
+        relation: '',
+        imageUrl: '',
+        description: ''
+    });
+
+    const refreshList = () => setFaces(faceService.getFaces());
+
+    const handleAddSubmit = () => {
+        if (!form.name || !form.imageUrl) return;
+        faceService.addFace({
+            name: form.name,
+            relation: form.relation || '亲友',
+            imageUrl: form.imageUrl,
+            description: form.description
+        });
+        refreshList();
+        setForm({ name: '', relation: '', imageUrl: '', description: '' });
+        setShowAddModal(false);
     };
+
+    const handleDelete = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (confirm('确定要删除这张照片吗？')) {
+            faceService.deleteFace(id);
+            refreshList();
+        }
+    };
+
+    return (
+        <div className="flex flex-col gap-5 p-5 pb-24 animate-fade-in-up">
+            <div>
+                <h2 className="text-xl font-bold text-slate-800 mb-3">时光相册</h2>
+                <p className="text-xs text-slate-500 mb-3">老人端相册中的照片，用于回忆唤起</p>
+                <div className="grid grid-cols-2 gap-3">
+                    {ALBUM_MEMORIES.map((photo) => (
+                        <div key={photo.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                            <div className="aspect-square rounded-xl overflow-hidden bg-slate-100 mb-2">
+                                <img src={photo.url} alt={photo.location} className="w-full h-full object-cover" />
+                            </div>
+                            <h4 className="font-bold text-slate-800 text-sm truncate">{photo.location}</h4>
+                            <p className="text-xs text-slate-500 mt-0.5 truncate">{photo.date}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div>
+                <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-xl font-bold text-slate-800">人脸相册</h2>
+                    <button
+                        onClick={() => setShowAddModal(true)}
+                        className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-lg shadow-indigo-200 active:scale-95"
+                    >
+                        <Plus size={16} /> 添加照片
+                    </button>
+                </div>
+                <p className="text-xs text-slate-500 mb-3">老人说不认识时可识别人脸，下方为预设亲属照片</p>
+
+                <div className="grid grid-cols-2 gap-4">
+                    {FACE_RECOGNITION_CONFIG.map((item) => (
+                        <div key={`preset-${item.file}`} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                            <div className="aspect-square rounded-xl overflow-hidden bg-slate-100 mb-3">
+                                <img src={`/faces/${item.file}`} alt={item.relation} className="w-full h-full object-cover" />
+                            </div>
+                            <h4 className="font-bold text-slate-800 text-sm text-center">{item.name || item.relation}</h4>
+                            <p className="text-xs text-slate-500 text-center mt-0.5">{item.relation}</p>
+                        </div>
+                    ))}
+                    {faces.map((face) => (
+                        <div key={face.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 relative group">
+                            <button
+                                onClick={(e) => handleDelete(face.id, e)}
+                                className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                                <X size={12} />
+                            </button>
+                            <div className="aspect-square rounded-xl overflow-hidden bg-slate-100 mb-3">
+                                <img src={face.imageUrl} alt={face.name} className="w-full h-full object-cover" />
+                            </div>
+                            <h4 className="font-bold text-slate-800 text-sm text-center">{face.name}</h4>
+                            <p className="text-xs text-slate-500 text-center mt-0.5">{face.relation}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {showAddModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setShowAddModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-800">添加人脸照片</h3>
+                            <button onClick={() => setShowAddModal(false)}><X size={20} className="text-slate-400" /></button>
+                        </div>
+                        <div className="p-4 space-y-3">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 block mb-1">照片 URL</label>
+                                <input type="text" value={form.imageUrl} onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" placeholder="https://..." />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-1">姓名</label>
+                                    <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" placeholder="如：张伟" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-1">关系</label>
+                                    <input type="text" value={form.relation} onChange={(e) => setForm((f) => ({ ...f, relation: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" placeholder="如：儿子" />
+                                </div>
+                            </div>
+                            <button onClick={handleAddSubmit} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold mt-2">保存照片</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
     const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
@@ -1592,769 +3276,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
 
         run();
     }, [activeTab, isSettingsOpen, historyIndex, historyData]);
-
-
-
-    // --- Sub-Components ---
-
-    const MIN_RECORDING_SECONDS = 10;
-
-    const SettingsView = () => {
-        // Voice Clone State
-        const [cloneStep, setCloneStep] = useState<'idle' | 'recording' | 'processing' | 'done'>('idle');
-        const [voiceProgress, setVoiceProgress] = useState(0);
-        const [clonedVoiceName, setClonedVoiceName] = useState<string>('');
-        const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null);
-        const [isRecording, setIsRecording] = useState(false);
-        const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null);
-        const [recordingSeconds, setRecordingSeconds] = useState(0);
-        const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-        const audioChunksRef = useRef<Blob[]>([]);
-        const fileInputRef = useRef<HTMLInputElement>(null);
-        const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-        const recordingSecondsRef = useRef(0);
-
-        // 所有音色（Edge 预设 + 克隆）& 当前选中
-        const [allVoices, setAllVoices] = useState<{ id: string; name: string; isCloned?: boolean }[]>([]);
-        const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(() =>
-            voiceSelectionService.getSelectedVoiceId()
-        );
-
-        // 3D Avatar Generation State
-        const [avatarStep, setAvatarStep] = useState<'idle' | 'uploading' | 'scanning' | 'rigging' | 'rendering' | 'done'>('idle');
-        const [avatarProgress, setAvatarProgress] = useState(0);
-        const [generatedAvatarUrl, setGeneratedAvatarUrl] = useState<string | null>(null);
-
-        // OpenClaw connection state
-        const [openclawStatus, setOpenclawStatus] = useState<{
-            syncEnabled: boolean;
-            elderId?: string;
-            bridgeBaseUrl?: string;
-            bridgeHealthy?: boolean;
-            gatewayConfigured?: boolean;
-            loading: boolean;
-            error?: string;
-        }>({
-            syncEnabled: openclawSyncService.isEnabled(),
-            elderId: openclawSyncService.getElderId(),
-            bridgeBaseUrl: getOpenClawBridgeBaseUrl(),
-            bridgeHealthy: undefined,
-            gatewayConfigured: undefined,
-            loading: false,
-            error: undefined,
-        });
-
-        // Guardian contacts (family members in profile)
-        const [profile, setProfile] = useState<ElderlyProfile | null>(() => aiService.getProfile());
-        const [savingProfile, setSavingProfile] = useState(false);
-        const [profileHint, setProfileHint] = useState<string | null>(null);
-
-        // 加载所有音色（Edge 预设 + 克隆）& 订阅选中变化
-        const loadVoices = async () => {
-            const all = await VoiceService.getAllVoices();
-            setAllVoices(all.map((v) => ({ id: v.id, name: v.name, isCloned: v.isCloned })));
-        };
-
-        useEffect(() => {
-            loadVoices();
-            const unsub = voiceSelectionService.subscribe((id) => setSelectedVoiceId(id));
-            return unsub;
-        }, []);
-
-        // 检测 OpenClaw bridge 与 Gateway 连接状态
-        useEffect(() => {
-            const syncEnabled = openclawSyncService.isEnabled();
-            const elderId = openclawSyncService.getElderId();
-            const bridgeBaseUrl = getOpenClawBridgeBaseUrl();
-            setOpenclawStatus((prev) => ({
-                ...prev,
-                syncEnabled,
-                elderId,
-                bridgeBaseUrl,
-                loading: syncEnabled && !!bridgeBaseUrl,
-                error: undefined,
-            }));
-
-            if (!syncEnabled || !bridgeBaseUrl) {
-                return;
-            }
-
-            (async () => {
-                try {
-                    const res = await fetch(`${bridgeBaseUrl}/healthz`, {
-                        headers: {
-                            ...(import.meta.env.VITE_OPENCLAW_BRIDGE_TOKEN
-                                ? { 'x-emobit-bridge-token': import.meta.env.VITE_OPENCLAW_BRIDGE_TOKEN as string }
-                                : {}),
-                        },
-                    });
-                    if (!res.ok) {
-                        throw new Error(`HTTP ${res.status}`);
-                    }
-                    const json = await res.json();
-                    setOpenclawStatus((prev) => ({
-                        ...prev,
-                        loading: false,
-                        bridgeHealthy: !!json.ok,
-                        gatewayConfigured: !!json.gatewayConfigured,
-                    }));
-                } catch (error) {
-                    console.warn('[Settings] OpenClaw bridge health check failed:', error);
-                    setOpenclawStatus((prev) => ({
-                        ...prev,
-                        loading: false,
-                        bridgeHealthy: false,
-                        gatewayConfigured: false,
-                        error: '无法连接到 EmoBit Bridge，请检查 `npm run openclaw:bridge` 是否已启动以及 Token 配置。',
-                    }));
-                }
-            })();
-        }, []);
-
-        const handleGuardianFieldChange = (index: number, field: 'name' | 'relation' | 'phone', value: string) => {
-            setProfile((prev) => {
-                if (!prev) return prev;
-                const nextMembers = [...prev.familyMembers];
-                const current = nextMembers[index] || { name: '', relation: '家属', phone: '' };
-                nextMembers[index] = { ...current, [field]: value };
-                return { ...prev, familyMembers: nextMembers };
-            });
-        };
-
-        const handleAddGuardian = () => {
-            setProfile((prev) => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    familyMembers: [
-                        ...prev.familyMembers,
-                        { name: '', relation: '家属', phone: '' },
-                    ],
-                };
-            });
-        };
-
-        const handleRemoveGuardian = (index: number) => {
-            setProfile((prev) => {
-                if (!prev) return prev;
-                const nextMembers = prev.familyMembers.filter((_, i) => i !== index);
-                return { ...prev, familyMembers: nextMembers };
-            });
-        };
-
-        const handleSaveGuardians = () => {
-            if (!profile) return;
-            setSavingProfile(true);
-            try {
-                aiService.setProfile(profile);
-                setProfileHint('已保存家属联系人，并同步到 OpenClaw bridge。');
-                setTimeout(() => setProfileHint(null), 2500);
-            } finally {
-                setSavingProfile(false);
-            }
-        };
-
-        // 开始录音
-        const handleStartRecording = async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const mr = new MediaRecorder(stream);
-                mediaRecorderRef.current = mr;
-                audioChunksRef.current = [];
-                recordingSecondsRef.current = 0;
-                setRecordingSeconds(0);
-
-                mr.ondataavailable = (e) => {
-                    if (e.data.size > 0) audioChunksRef.current.push(e.data);
-                };
-
-                mr.onstop = async () => {
-                    stream.getTracks().forEach((t) => t.stop());
-                    const raw = new Blob(audioChunksRef.current, {
-                        type: mr.mimeType || 'audio/webm',
-                    });
-                    try {
-                        const wav = await blobToWav(raw);
-                        setRecordedAudio(wav);
-                    } catch (e) {
-                        console.error('转 WAV 失败', e);
-                        setRecordedAudio(raw);
-                    }
-                };
-
-                mr.start();
-                setIsRecording(true);
-                setCloneStep('recording');
-                recordingTimerRef.current = setInterval(() => {
-                    recordingSecondsRef.current += 1;
-                    setRecordingSeconds(recordingSecondsRef.current);
-                }, 1000);
-            } catch (err) {
-                console.error('录音失败:', err);
-                alert('无法访问麦克风，请检查权限设置');
-            }
-        };
-
-        // 停止录音（需 ≥10 秒）
-        const handleStopRecording = () => {
-            if (recordingTimerRef.current) {
-                clearInterval(recordingTimerRef.current);
-                recordingTimerRef.current = null;
-            }
-            if (mediaRecorderRef.current && isRecording) {
-                const secs = recordingSecondsRef.current;
-                if (secs < MIN_RECORDING_SECONDS) {
-                    alert(`请至少录制 ${MIN_RECORDING_SECONDS} 秒。当前 ${secs} 秒。`);
-                    recordingSecondsRef.current = 0;
-                    setRecordingSeconds(0);
-                    return;
-                }
-                mediaRecorderRef.current.stop();
-                setIsRecording(false);
-                recordingSecondsRef.current = 0;
-                setRecordingSeconds(0);
-                setCloneStep('idle');
-            }
-        };
-
-        // 处理文件上传（时长 ≥10 秒才允许克隆，并转为 WAV 供后端）
-        const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-            if (!file.type.startsWith('audio/')) {
-                alert('请选择音频文件（WAV/MP3 等）');
-                return;
-            }
-            try {
-                const dur = await getAudioDurationSeconds(file);
-                if (dur < MIN_RECORDING_SECONDS) {
-                    alert(`音频时长至少 ${MIN_RECORDING_SECONDS} 秒，当前约 ${dur.toFixed(1)} 秒。`);
-                    event.target.value = '';
-                    return;
-                }
-            } catch (e) {
-                console.warn('无法解析音频时长，仍允许使用', e);
-            }
-            try {
-                const wav = await blobToWav(file);
-                setRecordedAudio(wav);
-            } catch (e) {
-                console.error('转 WAV 失败', e);
-                setRecordedAudio(file);
-            }
-            setCloneStep('idle');
-            event.target.value = '';
-        };
-
-        /** 设为当前使用。传 null 表示使用默认孙女声（晓伊）。 */
-        const handleSetAsCurrent = (id: string | null) => {
-            voiceSelectionService.setSelectedVoiceId(id);
-            setSelectedVoiceId(id);
-            VoiceService.preloadClonePhrases(id ?? undefined);
-        };
-
-        // 开始语音克隆
-        const handleStartVoiceClone = async () => {
-            if (!recordedAudio) {
-                fileInputRef.current?.click();
-                return;
-            }
-
-            console.log('[克隆] 开始流程, 音频大小:', recordedAudio.size);
-            setCloneStep('processing');
-            setVoiceProgress(0);
-
-            let progressInterval: ReturnType<typeof setInterval> | null = null;
-            try {
-                const voiceName = clonedVoiceName || `子女声音_${new Date().toLocaleDateString()}`;
-                progressInterval = setInterval(() => {
-                    setVoiceProgress(prev => {
-                        if (prev >= 90) return 90;
-                        return prev + 10;
-                    });
-                }, 300);
-
-                console.log('[克隆] 调用 VoiceService.cloneVoice...');
-                const result = await VoiceService.cloneVoice(recordedAudio, voiceName);
-
-                if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
-                setVoiceProgress(100);
-                console.log('[克隆] 结果', result);
-
-                if (result.status === 'ready' && result.isCloned) {
-                    setClonedVoiceId(result.id);
-                    setCloneStep('done');
-                    await loadVoices();
-                    voiceSelectionService.setSelectedVoiceId(result.id);
-                    setSelectedVoiceId(result.id);
-                    VoiceService.preloadClonePhrases(result.id);
-                    console.log('[克隆] 完成，已切换为当前音色');
-                } else if (result.status === 'failed') {
-                    throw new Error('克隆失败');
-                } else {
-                    console.warn('[克隆] 服务不可用，使用预设音色');
-                    setCloneStep('idle');
-                    setVoiceProgress(0);
-                }
-            } catch (e) {
-                if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
-                const msg = e instanceof Error ? e.message : '未知错误';
-                console.error('[克隆] 失败', e);
-                alert(`语音克隆失败：${msg}\n\n请确认：\n1. 已启动语音克隆服务 (./scripts/start_voice_clone.sh)\n2. 浏览器控制台与服务器日志中的报错信息`);
-                setCloneStep('idle');
-                setVoiceProgress(0);
-            }
-        };
-
-        // 试听克隆声音
-        const handlePreviewVoice = async () => {
-            if (!clonedVoiceId) return;
-
-            try {
-                await VoiceService.speak('你好，我是你的数字人助手', clonedVoiceId);
-            } catch (error) {
-                console.error('试听失败:', error);
-                alert('试听失败，请检查服务连接');
-            }
-        };
-
-        const handleCreateAvatar = async () => {
-            setAvatarStep('uploading');
-
-            // Call API Service
-            // Create dummy file
-            const dummyFile = new File([""], "photo.jpg", { type: "image/jpeg" });
-
-            try {
-                // 1. Uploading
-                setTimeout(() => setAvatarStep('scanning'), 1000);
-
-                // 2. Call Service (This is async)
-                const result = await AvatarService.generateAvatar(dummyFile);
-
-                // 3. Update UI steps to show "process"
-                setTimeout(() => setAvatarStep('rigging'), 2500);
-                setTimeout(() => setAvatarStep('rendering'), 4000);
-
-                // 4. Finish
-                setTimeout(() => {
-                    setAvatarStep('done');
-                    setGeneratedAvatarUrl(result.meshUrl); // In a real app, you'd load this GLB into a viewer
-                }, 5500);
-
-            } catch (e) {
-                console.error("Avatar generation failed", e);
-                setAvatarStep('idle');
-            }
-        };
-
-        return (
-            <div className="flex flex-col h-full bg-[#F8FAFC] animate-fade-in-up">
-                {/* Settings Header */}
-                <div className="px-5 py-4 flex items-center justify-between sticky top-0 z-10 bg-[#F8FAFC]/90 backdrop-blur-sm">
-                    <button
-                        onClick={() => setIsSettingsOpen(false)}
-                        className="p-2 -ml-2 text-slate-500 hover:text-slate-800 transition-colors"
-                    >
-                        <ArrowLeft size={24} />
-                    </button>
-                    <h2 className="text-lg font-bold text-slate-800">系统设置</h2>
-                    <div className="w-8"></div>
-                </div>
-
-                <div className="p-5 space-y-6 pb-20">
-
-
-
-                    {/* 2. Voice Clone Feature Card */}
-                    <div className="bg-gradient-to-br from-indigo-600 to-blue-600 rounded-[2rem] p-6 text-white shadow-xl shadow-indigo-200 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-40 h-40 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-3xl"></div>
-
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-white/20 rounded-lg backdrop-blur-md border border-white/20">
-                                <Mic size={20} className="text-yellow-300" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-lg leading-tight">AI 语音克隆</h3>
-                                <p className="text-[10px] text-indigo-100 opacity-80">Powered by Gemini Nano</p>
-                            </div>
-                        </div>
-
-                        <p className="text-sm text-indigo-50 leading-relaxed mb-6 opacity-90">
-                            直接录音 ≥10 秒或上传 ≥10 秒音频（WAV/MP3），整合为一份样本后用于克隆。克隆一次即存为一个音色，可在下方切换使用。
-                        </p>
-
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="audio/*"
-                            onChange={handleFileUpload}
-                            className="hidden"
-                        />
-
-                        {cloneStep === 'idle' && (
-                            <div className="space-y-3">
-                                <input
-                                    type="text"
-                                    placeholder="输入声音名称（如：女儿的声音）"
-                                    value={clonedVoiceName}
-                                    onChange={(e) => setClonedVoiceName(e.target.value)}
-                                    className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30"
-                                />
-                                <div className="bg-white/10 rounded-xl p-1 backdrop-blur-sm border border-white/20 flex gap-1">
-                                    <button
-                                        onClick={isRecording ? handleStopRecording : handleStartRecording}
-                                        className={`flex-1 py-3 rounded-lg font-bold text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-transform ${isRecording ? 'bg-rose-500 text-white' : 'bg-white text-indigo-600'
-                                            }`}
-                                    >
-                                        <Mic size={16} />
-                                        {isRecording ? '停止录音' : '开始录音'}
-                                    </button>
-                                    <button
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="flex-1 bg-white/20 text-white py-3 rounded-lg font-bold text-sm shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-transform hover:bg-white/30"
-                                    >
-                                        <Upload size={16} /> 上传文件
-                                    </button>
-                                </div>
-                                {recordedAudio && (
-                                    <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-xl p-3 flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-emerald-100 text-sm">
-                                            <CheckCircle size={16} />
-                                            已选择音频（≥10 秒）
-                                        </div>
-                                        <button
-                                            onClick={handleStartVoiceClone}
-                                            className="bg-white text-emerald-600 px-4 py-2 rounded-lg text-xs font-bold active:scale-95 transition-transform"
-                                        >
-                                            开始克隆
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {cloneStep === 'recording' && (
-                            <div className="flex flex-col items-center justify-center py-2">
-                                <div className="flex gap-1 h-8 items-center mb-2">
-                                    {[1, 2, 3, 4, 5].map((i) => (
-                                        <div
-                                            key={i}
-                                            className="w-1.5 bg-white rounded-full animate-talk"
-                                            style={{
-                                                height: Math.random() * 20 + 10 + 'px',
-                                                animationDelay: i * 0.1 + 's',
-                                            }}
-                                        />
-                                    ))}
-                                </div>
-                                <p className="text-sm font-mono text-white tabular-nums">
-                                    {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:
-                                    {String(recordingSeconds % 60).padStart(2, '0')}
-                                </p>
-                                <p className="text-xs text-indigo-100 mt-1">
-                                    至少 {MIN_RECORDING_SECONDS} 秒后可停止
-                                </p>
-                                <button
-                                    onClick={handleStopRecording}
-                                    disabled={recordingSeconds < MIN_RECORDING_SECONDS}
-                                    className="mt-3 px-4 py-2 bg-rose-500 text-white rounded-lg text-xs font-bold active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    停止录音
-                                </button>
-                            </div>
-                        )}
-
-                        {cloneStep === 'processing' && (
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-xs font-medium opacity-80">
-                                    <span>构建声纹模型</span>
-                                    <span>{voiceProgress}%</span>
-                                </div>
-                                <div className="h-2 bg-black/20 rounded-full overflow-hidden">
-                                    <div className="h-full bg-white rounded-full transition-all duration-150" style={{ width: `${voiceProgress}%` }}></div>
-                                </div>
-                            </div>
-                        )}
-
-                        {cloneStep === 'done' && (
-                            <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-xl p-3 flex flex-col gap-3 animate-fade-in">
-                                <div className="flex items-center gap-2 text-emerald-100 text-sm font-bold">
-                                    <CheckCircle size={16} className="text-emerald-300" />
-                                    声音克隆完成！
-                                </div>
-                                <p className="text-xs text-emerald-100/80">已存为可切换音色，当前已设为使用中</p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        onClick={handlePreviewVoice}
-                                        className="bg-white/10 hover:bg-white/20 text-white text-xs py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-1.5"
-                                    >
-                                        <Play size={12} /> 试听效果
-                                    </button>
-                                    <button
-                                        onClick={() =>
-                                            VoiceService.speak(
-                                                '你好，我是你的数字人助手，很高兴为你服务',
-                                                clonedVoiceId || undefined
-                                            )
-                                        }
-                                        className="bg-white text-emerald-600 text-xs py-2 rounded-lg font-bold shadow-sm flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
-                                    >
-                                        <Volume2 size={12} /> 发送问候
-                                    </button>
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        setCloneStep('idle');
-                                        setRecordedAudio(null);
-                                        setClonedVoiceId(null);
-                                        setVoiceProgress(0);
-                                    }}
-                                    className="bg-white/10 hover:bg-white/20 text-white text-xs py-2 rounded-lg font-medium transition-colors"
-                                >
-                                    克隆新声音
-                                </button>
-                            </div>
-                        )}
-
-                        <div className="mt-4 pt-4 border-t border-white/20">
-                            <h4 className="text-xs font-bold text-indigo-100 uppercase tracking-wider mb-2">
-                                TTS 音色 · 可切换（Edge 预设 + 克隆）
-                            </h4>
-                            <div className="space-y-2 max-h-48 overflow-y-auto">
-                                {allVoices.map((v) => (
-                                    <div
-                                        key={v.id}
-                                        className="flex items-center justify-between gap-2 bg-white/10 rounded-lg px-3 py-2"
-                                    >
-                                        <span className="text-sm text-white truncate flex-1">
-                                            {v.name}
-                                            {v.isCloned && (
-                                                <span className="ml-1 text-[10px] text-amber-300">克隆</span>
-                                            )}
-                                            {(selectedVoiceId === v.id || (!selectedVoiceId && v.id === 'edge_xiaoyi')) && (
-                                                <span className="ml-1 text-[10px] text-emerald-300">当前使用</span>
-                                            )}
-                                        </span>
-                                        <div className="flex gap-1 shrink-0">
-                                            <button
-                                                onClick={() =>
-                                                    VoiceService.speak('你好，我是你的数字人助手', v.id)
-                                                }
-                                                className="px-2 py-1 bg-white/20 text-white text-[10px] rounded hover:bg-white/30"
-                                            >
-                                                试听
-                                            </button>
-                                            <button
-                                                onClick={() => handleSetAsCurrent(v.id)}
-                                                className="px-2 py-1 bg-white/20 text-white text-[10px] rounded hover:bg-white/30"
-                                            >
-                                                设为当前
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* General Settings */}
-                    <div className="space-y-4">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider pl-1">通用设置</h4>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
-                                    <AlertCircle size={20} />
-                                </div>
-                                <div>
-                                    <p className="font-bold text-slate-800 text-sm">跌倒自动报警</p>
-                                </div>
-                            </div>
-                            <ToggleRight size={28} className="text-indigo-600" />
-                        </div>
-
-                        {/* OpenClaw Connection Status */}
-                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
-                                        <Link2 size={18} />
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-slate-800 text-sm">OpenClaw 同步</p>
-                                        <p className="text-[11px] text-slate-500">
-                                            {openclawStatus.syncEnabled
-                                                ? `已启用，elderId=${openclawStatus.elderId || '未配置'}`
-                                                : '未启用（检查 VITE_OPENCLAW_* 环境变量）'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <span
-                                    className={`flex items-center text-[11px] font-semibold ${
-                                        openclawStatus.syncEnabled ? 'text-emerald-600' : 'text-slate-400'
-                                    }`}
-                                >
-                                    <span
-                                        className={`w-2 h-2 rounded-full mr-1 ${
-                                            openclawStatus.syncEnabled ? 'bg-emerald-500' : 'bg-slate-300'
-                                        }`}
-                                    />
-                                    {openclawStatus.syncEnabled ? 'ON' : 'OFF'}
-                                </span>
-                            </div>
-
-                            {openclawStatus.bridgeBaseUrl && (
-                                <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 space-y-1">
-                                    <div className="flex items-center justify-between">
-                                        <span className="flex items-center gap-1">
-                                            <Wifi size={12} /> Bridge
-                                        </span>
-                                        <span
-                                            className={`flex items-center gap-1 ${
-                                                openclawStatus.loading
-                                                    ? 'text-slate-400'
-                                                    : openclawStatus.bridgeHealthy
-                                                        ? 'text-emerald-600'
-                                                        : 'text-rose-500'
-                                            }`}
-                                        >
-                                            <span
-                                                className={`w-2 h-2 rounded-full ${
-                                                    openclawStatus.loading
-                                                        ? 'bg-slate-300'
-                                                        : openclawStatus.bridgeHealthy
-                                                            ? 'bg-emerald-500'
-                                                            : 'bg-rose-500'
-                                                }`}
-                                            />
-                                            {openclawStatus.loading
-                                                ? '检测中…'
-                                                : openclawStatus.bridgeHealthy
-                                                    ? '已连接'
-                                                    : '未连接'}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="flex items-center gap-1">
-                                            <Activity size={12} /> Gateway
-                                        </span>
-                                        <span
-                                            className={`${
-                                                openclawStatus.gatewayConfigured ? 'text-emerald-600' : 'text-slate-400'
-                                            }`}
-                                        >
-                                            {openclawStatus.gatewayConfigured ? '已配置' : '未知 / 未配置'}
-                                        </span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-400 pt-1">
-                                        请先启动 `npm run openclaw:bridge`，并在 OpenClaw Gateway 中安装
-                                        EmoBit 插件、消息通道和 `@openclaw/voice-call`。
-                                    </p>
-                                    {openclawStatus.error && (
-                                        <p className="text-[10px] text-rose-500 pt-1">{openclawStatus.error}</p>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Guardian Contacts Configuration */}
-                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
-                                        <Users size={20} />
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-slate-800 text-sm">家属联系人</p>
-                                        <p className="text-[11px] text-slate-500">
-                                            这里配置的家属姓名与手机号会同步到 OpenClaw，用于消息通知与语音外呼。
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {!profile ? (
-                                <p className="text-xs text-slate-500">
-                                    当前尚未加载老人档案，请先在老人端完成基础资料配置。
-                                </p>
-                            ) : (
-                                <>
-                                    <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-                                        {profile.familyMembers.map((member, index) => (
-                                            <div
-                                                key={`${member.name || 'guardian'}_${index}`}
-                                                className="flex items-center gap-2"
-                                            >
-                                                <input
-                                                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs"
-                                                    placeholder="姓名"
-                                                    value={member.name}
-                                                    onChange={(e) =>
-                                                        handleGuardianFieldChange(index, 'name', e.target.value)
-                                                    }
-                                                />
-                                                <input
-                                                    className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs"
-                                                    placeholder="关系"
-                                                    value={member.relation}
-                                                    onChange={(e) =>
-                                                        handleGuardianFieldChange(index, 'relation', e.target.value)
-                                                    }
-                                                />
-                                                <input
-                                                    className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 text-xs"
-                                                    placeholder="手机号"
-                                                    value={member.phone || ''}
-                                                    onChange={(e) =>
-                                                        handleGuardianFieldChange(index, 'phone', e.target.value)
-                                                    }
-                                                />
-                                                <button
-                                                    onClick={() => handleRemoveGuardian(index)}
-                                                    className="p-1 text-slate-400 hover:text-rose-500"
-                                                >
-                                                    <X size={14} />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="flex items-center justify-between pt-2">
-                                        <button
-                                            onClick={handleAddGuardian}
-                                            className="flex items-center gap-1 text-[11px] text-indigo-600 font-semibold"
-                                        >
-                                            <Plus size={14} /> 添加联系人
-                                        </button>
-                                        <button
-                                            onClick={handleSaveGuardians}
-                                            disabled={savingProfile}
-                                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-[11px] font-bold rounded-lg"
-                                        >
-                                            {savingProfile ? '保存中…' : '保存并同步'}
-                                        </button>
-                                    </div>
-                                    {profileHint && (
-                                        <p className="text-[11px] text-emerald-600 pt-1 flex items-center gap-1">
-                                            <CheckCircle size={12} /> {profileHint}
-                                        </p>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    </div>
-
-                    <button className="w-full py-4 text-center text-rose-500 text-sm font-bold bg-rose-50 rounded-2xl border border-rose-100 hover:bg-rose-100 transition-colors">
-                        退出登录
-                    </button>
-                </div>
-                <style>{`
-                .animate-progress-indeterminate { animation: progressIndeterminate 1.5s infinite linear; }
-                @keyframes progressIndeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-            `}</style>
-            </div>
-        );
-    };
-
     const sundowningTrendData = useMemo(() => {
         const history = sundowningHistory.slice(-24);
         if (history.length === 0) {
@@ -2575,1035 +3496,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         </div>
     );
 
-    const HealthTab = () => {
-        const totalSleepHours = mockSleepData.reduce((acc, d) => (d.name === '深睡' || d.name === '浅睡') ? acc + d.hours : acc, 0);
-        const deepSleepHours = mockSleepData.find(d => d.name === '深睡')?.hours ?? 0;
-        const lightSleepHours = mockSleepData.find(d => d.name === '浅睡')?.hours ?? 0;
-        const awakeHours = mockSleepData.find(d => d.name === '清醒')?.hours ?? 0;
-        const deepRatio = totalSleepHours > 0 ? deepSleepHours / totalSleepHours : 0;
-        const sleepMinutes = Math.round(totalSleepHours * 60);
-        const displayHours = Math.floor(sleepMinutes / 60);
-        const displayMins = sleepMinutes % 60;
-        const sleepDisplay = `${displayHours}小时 ${displayMins > 0 ? displayMins + '分' : '0分'}`;
-
-        // 体征概要（用于顶部「需要您关注」和小卡片）
-        const heartRate = currentMetrics.heartRate;
-        const bloodPressure = currentMetrics.bloodPressure;
-        const bloodOxygen = currentMetrics.bloodOxygen;
-
-        const sleepScore = useMemo(() => {
-            let s = 60;
-            if (totalSleepHours >= 7 && totalSleepHours <= 9) s += 20;
-            else if (totalSleepHours >= 6 && totalSleepHours < 7) s += 10;
-            else if (totalSleepHours < 5) s -= 15;
-            if (deepRatio >= 0.25 && deepRatio <= 0.45) s += 15;
-            else if (deepRatio >= 0.2) s += 5;
-            return Math.min(98, Math.max(55, s));
-        }, [totalSleepHours, deepRatio]);
-
-        // 指标正常/异常判断
-        const isHeartNormal = heartRate >= 60 && heartRate <= 100;
-        const isBpHigh = bloodPressure.systolic >= 140 || bloodPressure.diastolic >= 90;
-        const isBpBorderline = !isBpHigh && (bloodPressure.systolic >= 130 || bloodPressure.diastolic >= 85);
-        const isBpNormal = !isBpHigh && !isBpBorderline;
-        const isSpo2Normal = bloodOxygen >= 95;
-        const isSleepGood = sleepScore >= 80;
-        const isSleepBorderline = !isSleepGood && sleepScore >= 70;
-
-        type HealthAlert = {
-            key: string;
-            title: string;
-            value: string;
-            normalRange: string;
-            message: string;
-            color: 'rose' | 'amber' | 'sky' | 'indigo';
-        };
-
-        const alerts: HealthAlert[] = [];
-
-        if (!isHeartNormal) {
-            alerts.push({
-                key: 'heart',
-                title: heartRate > 100 ? '心率偏快' : '心率偏慢',
-                value: `${heartRate} bpm`,
-                normalRange: '60-100 bpm',
-                message: heartRate > 100
-                    ? '心率略快，可提醒爸爸稍作休息，避免剧烈运动，如持续心悸不适建议就医评估。'
-                    : '心率偏慢，如伴有头晕乏力、胸闷气短等症状，建议尽快就医评估心功能。',
-                color: 'rose',
-            });
-        }
-
-        if (!isBpNormal) {
-            alerts.push({
-                key: 'bp',
-                title: isBpHigh ? '血压偏高' : '血压临界偏高',
-                value: `${bloodPressure.systolic}/${bloodPressure.diastolic} mmHg`,
-                normalRange: '90-120 / 60-80 mmHg',
-                message: isBpHigh
-                    ? '血压已明显高于正常范围，建议密切观察，如反复偏高或伴头痛胸闷等不适，请及时就医。'
-                    : '血压略高，属于临界范围，可提醒爸爸清淡饮食、适度运动，注意作息并定期复测。',
-                color: 'amber',
-            });
-        }
-
-        if (!isSpo2Normal) {
-            alerts.push({
-                key: 'spo2',
-                title: '血氧偏低',
-                value: `${bloodOxygen}%`,
-                normalRange: '≥95%',
-                message: '血氧饱和度略低，如持续低于 93% 或出现明显气促、胸闷等，请尽快就医评估心肺功能。',
-                color: 'sky',
-            });
-        }
-
-        if (!isSleepGood && !isSleepBorderline) {
-            alerts.push({
-                key: 'sleep',
-                title: '睡眠质量偏低',
-                value: `${sleepScore} 分`,
-                normalRange: '良好 ≥ 80 分',
-                message: '昨夜睡眠时长和深睡比例偏少，可帮助爸爸调整作息，避免晚间浓茶咖啡和长时间看屏幕，如长期失眠建议就医。',
-                color: 'indigo',
-            });
-        }
-
-        const hasAttention = alerts.length > 0;
-
-        const { sleepDescription, sleepTipsOrAffirmation } = useMemo(() => {
-            const deepPct = Math.round(deepRatio * 100);
-            let description: string;
-            let tipsOrAffirmation: string;
-
-            if (totalSleepHours >= 7 && deepRatio >= 0.25) {
-                description = `昨日共睡 ${displayHours} 小时${displayMins > 0 ? ' ' + displayMins + ' 分' : ''}，其中深睡 ${deepSleepHours} 小时、浅睡 ${lightSleepHours} 小时。深睡占比约 ${deepPct}%，睡眠时长与结构均良好。`;
-                tipsOrAffirmation = `睡眠情况良好，时长与深睡占比都不错，子女可放心。请继续保持规律作息与良好习惯。`;
-            } else if (totalSleepHours >= 6) {
-                description = `昨日共睡 ${displayHours} 小时${displayMins > 0 ? ' ' + displayMins + ' 分' : ''}，其中深睡 ${deepSleepHours} 小时、浅睡 ${lightSleepHours} 小时${awakeHours > 0 ? '，夜间清醒约 ' + awakeHours + ' 小时' : ''}。深睡占比约 ${deepPct}%，整体尚可，仍有优化空间。`;
-                tipsOrAffirmation = `改善建议（子女可协助）：固定就寝与起床时间；白天适度活动、傍晚避免剧烈运动；睡前 1 小时避免屏幕与咖啡因；午睡不超过 30 分钟；卧室保持安静、昏暗。若持续入睡困难或早醒，可考虑就医排查睡眠障碍。`;
-            } else {
-                description = `昨日共睡 ${displayHours} 小时${displayMins > 0 ? ' ' + displayMins + ' 分' : ''}，其中深睡 ${deepSleepHours} 小时、浅睡 ${lightSleepHours} 小时${awakeHours > 0 ? '，夜间清醒约 ' + awakeHours + ' 小时' : ''}。睡眠时长偏少，深睡占比约 ${deepPct}%。`;
-                tipsOrAffirmation = `改善建议（子女可协助）：固定就寝与起床时间，即使睡得晚也尽量同一时间起床；白天多接触自然光、适度活动；睡前避免饱餐、酒精与咖啡因；减少午睡或控制在 20 分钟内；睡前可做放松活动（如温水泡脚、听轻音乐）。若长期睡眠不足或日间困倦明显，建议到睡眠门诊或神经内科评估。`;
-            }
-            return { sleepDescription: description, sleepTipsOrAffirmation: tipsOrAffirmation };
-        }, [totalSleepHours, deepRatio, deepSleepHours, lightSleepHours, awakeHours, displayHours, displayMins]);
-
-        return (
-            <div className="flex flex-col gap-5 p-4 pb-24 animate-fade-in-up bg-slate-50/80">
-
-                {/* 顶部「需要您关注」提醒区：柔和琥珀色，信息清晰 */}
-                {hasAttention ? (
-                    <>
-                        <div className="bg-amber-50 border border-amber-200 px-4 py-4 rounded-3xl shadow-sm">
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2.5">
-                                    <div className="w-9 h-9 rounded-2xl bg-amber-100 flex items-center justify-center">
-                                        <AlertTriangle size={18} className="text-amber-600" />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-slate-800">需要您关注</p>
-                                        <p className="text-[11px] text-slate-600">
-                                            共 {alerts.length} 项指标超出理想范围，系统已为您整理说明与建议。
-                                        </p>
-                                    </div>
-                                </div>
-                                <p className="text-[10px] text-slate-500">手环在线 · 实时监测</p>
-                            </div>
-                            <div className="flex items-center justify-between text-[11px] text-slate-500">
-                                <span>同步于 {new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
-                                <span className="font-medium text-amber-700">{alerts.length} 项提醒</span>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            {alerts.map((alert) => {
-                                const bg =
-                                    alert.color === 'rose'
-                                        ? 'bg-rose-50 border-rose-100'
-                                        : alert.color === 'amber'
-                                            ? 'bg-amber-50 border-amber-100'
-                                            : alert.color === 'sky'
-                                                ? 'bg-sky-50 border-sky-100'
-                                                : 'bg-indigo-50 border-indigo-100';
-                                const dot =
-                                    alert.color === 'rose'
-                                        ? 'bg-rose-400'
-                                        : alert.color === 'amber'
-                                            ? 'bg-amber-400'
-                                            : alert.color === 'sky'
-                                                ? 'bg-sky-400'
-                                                : 'bg-indigo-400';
-                                const valueColor =
-                                    alert.color === 'rose'
-                                        ? 'text-rose-600'
-                                        : alert.color === 'amber'
-                                            ? 'text-amber-600'
-                                            : alert.color === 'sky'
-                                                ? 'text-sky-600'
-                                                : 'text-indigo-600';
-
-                                return (
-                                    <div key={alert.key} className={`${bg} border rounded-3xl p-4 shadow-sm`}>
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
-                                                <p className="text-sm font-semibold text-slate-800">{alert.title}</p>
-                                            </div>
-                                            <span className="text-[11px] text-slate-500">
-                                                {new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                                            </span>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-3 mb-3">
-                                            <div className="bg-white/80 rounded-2xl px-3 py-2.5 border border-slate-100">
-                                                <p className="text-[11px] text-slate-500 mb-1">当前检测值</p>
-                                                <p className={`text-xl font-bold tabular-nums ${valueColor}`}>{alert.value}</p>
-                                            </div>
-                                            <div className="bg-white/80 rounded-2xl px-3 py-2.5 border border-slate-100">
-                                                <p className="text-[11px] text-slate-500 mb-1">参考正常范围</p>
-                                                <p className="text-sm font-semibold text-slate-700">{alert.normalRange}</p>
-                                            </div>
-                                        </div>
-                                        <div className="bg-white/80 rounded-2xl px-3 py-2.5 mb-2 border border-slate-100">
-                                            <p className="text-xs text-slate-600 leading-relaxed">
-                                                {alert.message}
-                                            </p>
-                                        </div>
-                                        <button className="text-xs text-slate-600 font-medium hover:text-slate-800">
-                                            查看该指标历史趋势 &gt;
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </>
-                ) : (
-                    <div className="bg-white border border-emerald-100 rounded-3xl p-4 shadow-sm relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-8 -mt-8" />
-                        <div className="relative z-10 flex items-center justify-between">
-                            <div className="flex items-center gap-2.5">
-                                <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
-                                    <ShieldCheck size={18} className="text-emerald-600" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-bold text-slate-800">今日暂无线索需特别关注</p>
-                                    <p className="text-[11px] text-slate-600">生命体征整体稳定，请继续保持良好作息</p>
-                                </div>
-                            </div>
-                            <p className="text-[11px] text-slate-500">{new Date().toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* Section: Vital Signs */}
-                <div className="flex items-center gap-2 px-1 mt-1">
-                    <h3 className="text-base font-bold text-slate-800">实时体征监测</h3>
-                    <div className="flex-1 h-px bg-slate-200/80"></div>
-                </div>
-
-                {/* 底部大图卡片：心率 / 血压 / 血氧 */}
-                <RealTimeHealthCharts metrics={currentMetrics} />
-
-                {/* Section: Sleep */}
-                <div className="flex items-center gap-2 px-1 mt-1">
-                    <h3 className="text-base font-bold text-slate-800">昨夜睡眠</h3>
-                    <div className="flex-1 h-px bg-slate-200/80"></div>
-                    <button type="button" className="text-xs font-medium text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5">
-                        查看详情 <ChevronRight size={14} className="inline" />
-                    </button>
-                </div>
-
-                {/* 昨夜睡眠大卡片（颜色参考 SleepAnalysis.tsx） */}
-                <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-gray-100/80">
-                    {/* Header：蓝紫渐变背景 + 得分圆环 */}
-                    <div
-                        className="p-4 text-white relative overflow-hidden"
-                        style={{ background: 'linear-gradient(135deg, #4338CA 0%, #6366F1 50%, #818CF8 100%)' }}
-                    >
-                        <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-white/10" />
-                        <div className="relative flex items-center justify-between">
-                            <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <Moon className="w-4 h-4 text-white/80" />
-                                    <span className="text-[12px] text-white/70">
-                                        入睡 22:30 — 起床 05:30
-                                    </span>
-                                </div>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-[28px] font-extrabold leading-none">{sleepDisplay}</span>
-                                </div>
-                                <div className="flex items-center gap-1 mt-1.5">
-                                    <ArrowUpRight className="w-3 h-3 text-[#A5F3FC]" />
-                                    <span className="text-[11px] text-[#A5F3FC]">较前一晚 +0.5h</span>
-                                </div>
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <div className="relative">
-                                    <svg width="56" height="56" viewBox="0 0 56 56">
-                                        <circle cx="28" cy="28" r="23" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="5" />
-                                        <circle
-                                            cx="28"
-                                            cy="28"
-                                            r="23"
-                                            fill="none"
-                                            stroke="#FFFFFF"
-                                            strokeWidth="5"
-                                            strokeDasharray={`${(sleepScore / 100) * 144.5} 144.5`}
-                                            strokeLinecap="round"
-                                            transform="rotate(-90 28 28)"
-                                        />
-                                    </svg>
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                        <span className="text-white" style={{ fontSize: '18px', fontWeight: 800, lineHeight: 1 }}>
-                                            {sleepScore}
-                                        </span>
-                                    </div>
-                                </div>
-                                <span className="text-[10px] text-white/60 mt-1">
-                                    {sleepScore >= 90 ? '优秀' : sleepScore >= 70 ? '一般' : '较差'}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-4">
-                        {/* 睡眠阶段分布：标题 + 图例 + 时间轴 */}
-                        <div className="flex items-center justify-between mb-1.5">
-                            <p className="text-[11px] text-gray-400">睡眠阶段分布</p>
-                            <div className="flex gap-3">
-                                <div className="flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#3730A3' }} />
-                                    <span className="text-[10px] text-gray-400">深睡</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#818CF8' }} />
-                                    <span className="text-[10px] text-gray-400">浅睡</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#C4B5FD' }} />
-                                    <span className="text-[10px] text-gray-400">REM</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="flex gap-[2px] mb-4 h-6 rounded-lg overflow-hidden">
-                            {[
-                                { type: 'light', w: 12 },
-                                { type: 'deep', w: 18 },
-                                { type: 'light', w: 8 },
-                                { type: 'rem', w: 10 },
-                                { type: 'deep', w: 16 },
-                                { type: 'light', w: 14 },
-                                { type: 'rem', w: 8 },
-                                { type: 'light', w: 14 },
-                            ].map((block, i) => {
-                                const colorMap: Record<string, string> = {
-                                    deep: '#3730A3',
-                                    light: '#818CF8',
-                                    rem: '#C4B5FD',
-                                };
-                                return (
-                                    <div
-                                        key={i}
-                                        className="h-full rounded-sm"
-                                        style={{ width: `${block.w}%`, backgroundColor: colorMap[block.type] }}
-                                    />
-                                );
-                            })}
-                        </div>
-
-                        {/* 深睡 / 浅睡 / REM 三块：颜色与 SleepAnalysis 一致 */}
-                        {(() => {
-                            const totalH = totalSleepHours || 1;
-                            const stages = [
-                                { label: '深睡', hours: deepSleepHours, color: '#3730A3', desc: '充足' },
-                                { label: '浅睡', hours: lightSleepHours, color: '#818CF8', desc: '正常' },
-                                { label: 'REM', hours: awakeHours, color: '#C4B5FD', desc: '正常' },
-                            ];
-                            return (
-                                <div className="flex gap-2 mb-3">
-                                    {stages.map((stage) => (
-                                        <div key={stage.label} className="flex-1 bg-gray-50 rounded-xl p-2.5">
-                                            <div className="flex items-center justify-between mb-1.5">
-                                                <span className="text-[12px] text-gray-500">{stage.label}</span>
-                                                <span
-                                                    className="text-[10px] px-1.5 py-0.5 rounded-md"
-                                                    style={{
-                                                        backgroundColor: `${stage.color}10`,
-                                                        color: stage.color,
-                                                        fontWeight: 500,
-                                                    }}
-                                                >
-                                                    {stage.desc}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-baseline justify-between">
-                                                <span style={{ fontSize: '16px', fontWeight: 700, color: stage.color }}>
-                                                    {stage.hours}h
-                                                </span>
-                                                <span className="text-[11px] text-gray-400">
-                                                    {Math.round((stage.hours / totalH) * 100)}%
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            );
-                        })()}
-
-                        {/* 总结建议：浅绿底 + 深绿色文字 */}
-                        <div className="bg-[#F0FDF4] rounded-xl px-3 py-2.5 flex items-start gap-2">
-                            <span className="text-[13px] mt-0.5">💡</span>
-                            <p className="text-[12px] text-[#166534] leading-relaxed">
-                                {sleepDescription}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Section: AI Analysis */}
-                <div className="flex items-center gap-2 px-1 mt-1">
-                    <h3 className="text-base font-bold text-[#1C2A3A]">AI 智能分析</h3>
-                    <span
-                        className="px-2 py-0.5 rounded-md text-[9px] font-semibold text-white"
-                        style={{ background: 'linear-gradient(135deg, #3478F6, #5856D6)' }}
-                    >
-                        AI
-                    </span>
-                    <div className="flex-1 h-px bg-slate-200/80"></div>
-                </div>
-
-                <div className="bg-white rounded-3xl border border-black/5 shadow-sm overflow-hidden">
-                    {/* Tabs：参考 AIHealthReport.tsx 分段控件 */}
-                    <div className="bg-[#ECEEF3] rounded-xl mx-3 mt-3 mb-2 p-1 flex gap-1">
-                        <button
-                            onClick={() => setActiveAiTab('report')}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] transition-all ${
-                                activeAiTab === 'report' ? 'bg-white shadow-sm text-[#1C2A3A]' : 'text-[#98A5B3]'
-                            }`}
-                            style={activeAiTab === 'report' ? { fontWeight: 600 } : {}}
-                        >
-                            <FileText className="w-3.5 h-3.5" />
-                            健康日报
-                        </button>
-                        <button
-                            onClick={() => setActiveAiTab('cognitive')}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] transition-all ${
-                                activeAiTab === 'cognitive' ? 'bg-white shadow-sm text-[#1C2A3A]' : 'text-[#98A5B3]'
-                            }`}
-                            style={activeAiTab === 'cognitive' ? { fontWeight: 600 } : {}}
-                        >
-                            <Brain className="w-3.5 h-3.5" />
-                            认知评估
-                        </button>
-                    </div>
-
-                    {/* Content */}
-                    <div className="p-4 pt-2">
-                        {activeAiTab === 'report' ? (
-                            <div className="bg-white rounded-2xl overflow-hidden shadow-[0_1px_8px_rgba(0,0,0,0.04)] border border-black/[0.04]">
-                                {/* Report Header：品牌主色渐变 */}
-                                <div
-                                    className="p-4 relative overflow-hidden"
-                                    style={{ background: 'linear-gradient(135deg, #4338CA 0%, #6366F1 50%, #818CF8 100%)' }}
-                                >
-                                    <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-white/10" />
-                                    <div className="absolute bottom-2 right-16 w-8 h-8 rounded-full bg-white/5" />
-
-                                    <div className="relative flex items-start gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                                            <Sparkles className="w-5 h-5 text-white" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-white" style={{ fontSize: '15px', fontWeight: 700 }}>
-                                                爸爸的健康日报
-                                            </h3>
-                                            <p className="text-white/60 text-[11px] mt-0.5">
-                                                综合体征数据 + 认知交互记录分析生成
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="p-4">
-
-                                    {reportLoading && (
-                                        <div className="flex flex-col items-center justify-center py-6">
-                                            <Loader2 size={24} className="animate-spin mb-2 text-white" />
-                                            <p className="text-[11px] text-white/80">正在生成今日健康日报…</p>
-                                        </div>
-                                    )}
-
-                                    {!reportContent && !reportLoading && (
-                                        <div className="flex flex-col items-center justify-center py-6">
-                                            <p className="text-[11px] text-white/80">即将生成…</p>
-                                        </div>
-                                    )}
-
-                                    {reportContent && !reportLoading && (() => {
-                                    const isError = reportContent.includes('出错') || reportContent.includes('失败');
-                                    if (isError) {
-                                        return (
-                                            <div className="space-y-3">
-                                                <p className="text-[11px] text-white/90">{reportContent}</p>
-                                                <button
-                                                    onClick={() => generateReport()}
-                                                    className="w-full h-9 rounded-2xl text-white text-xs font-semibold flex items-center justify-center gap-1 active:scale-[0.98] transition-all"
-                                                    style={{ background: 'linear-gradient(135deg, #3478F6 0%, #5856D6 100%)' }}
-                                                >
-                                                    重新生成健康日报
-                                                </button>
-                                            </div>
-                                        );
-                                    }
-                                    const { overall, pointsToNote, familySuggestions } = parseHealthBriefSections(reportContent);
-                                    return (
-                                        <div className="space-y-3">
-                                            <div className="bg-white rounded-2xl p-4 text-[#1C2A3A] space-y-4 border border-black/[0.04] shadow-sm">
-                                                {overall && (
-                                                    <div className="flex gap-3">
-                                                        <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
-                                                            <ShieldCheck className="text-emerald-600" size={16} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[13px] mb-1" style={{ fontWeight: 600 }}>
-                                                                整体评估
-                                                            </p>
-                                                            <div className="report-markdown text-[12px] leading-relaxed text-[#5E6C7B]">
-                                                                <ReactMarkdown>{overall}</ReactMarkdown>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {pointsToNote && (
-                                                    <div className="flex gap-3">
-                                                        <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
-                                                            <TrendingUp className="text-amber-600" size={16} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[13px] mb-1" style={{ fontWeight: 600 }}>
-                                                                需要留意
-                                                            </p>
-                                                            <div className="report-markdown text-[12px] leading-relaxed text-[#5E6C7B]">
-                                                                <ReactMarkdown>{pointsToNote}</ReactMarkdown>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {familySuggestions && (
-                                                    <div className="flex gap-3">
-                                                        <div className="w-8 h-8 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
-                                                            <Heart className="text-sky-600" size={16} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[13px] mb-1" style={{ fontWeight: 600 }}>
-                                                                亲情建议
-                                                            </p>
-                                                            <div className="report-markdown text-[12px] leading-relaxed text-[#5E6C7B]">
-                                                                <ReactMarkdown>{familySuggestions}</ReactMarkdown>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <button
-                                                onClick={() => setShowHealthReportModal(true)}
-                                                className="w-full h-10 rounded-xl text-white text-[12px] flex items-center justify-center gap-1 active:scale-[0.98] transition-all"
-                                                style={{ background: 'linear-gradient(135deg, #3478F6 0%, #5856D6 100%)' }}
-                                            >
-                                                查看完整报告 <ChevronRight className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    );
-                                })()}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="bg-emerald-50/90 rounded-2xl border border-emerald-200 overflow-hidden">
-                                <div className="flex items-center justify-between px-4 pt-4 pb-2">
-                                    <div className="flex items-center gap-2">
-                                        <Brain className="text-emerald-600" size={20} />
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-800">爸爸的认知评估</p>
-                                            <p className="text-[11px] text-slate-600">基于日常对话的NLP 智能分析</p>
-                                        </div>
-                                    </div>
-                                    {cognitiveBrief && (
-                                        <div className="flex flex-col items-center">
-                                            <div className="w-12 h-12 rounded-full bg-emerald-500 border-2 border-emerald-400 flex items-center justify-center text-white font-bold text-lg">
-                                                {cognitiveBrief.overallScore}
-                                            </div>
-                                            <p className="text-[10px] text-slate-600 mt-0.5">综合分</p>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {!cognitiveBrief && (
-                                    <div className="flex flex-col items-center justify-center py-10">
-                                        <Loader2 size={24} className="animate-spin mb-2 text-emerald-500" />
-                                        <p className="text-[11px] text-slate-500">正在生成认知评估报告…</p>
-                                    </div>
-                                )}
-
-                                {cognitiveBrief && !cognitiveLoading && (
-                                    <div className="px-4 pb-4 space-y-3">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {cognitiveBrief.dimensions.map((d) => {
-                                                const colorMap: Record<string, { bg: string; text: string; bar: string }> = {
-                                                    semantic: { bg: 'bg-emerald-100', text: 'text-emerald-700', bar: 'bg-emerald-500' },
-                                                    vocabulary: { bg: 'bg-sky-100', text: 'text-sky-700', bar: 'bg-sky-500' },
-                                                    emotion: { bg: 'bg-amber-100', text: 'text-amber-700', bar: 'bg-amber-500' },
-                                                    memory: { bg: 'bg-violet-100', text: 'text-violet-700', bar: 'bg-violet-500' },
-                                                };
-                                                const c = colorMap[d.id] || colorMap.semantic;
-                                                const Icon = d.id === 'semantic' ? Brain : d.id === 'vocabulary' ? BookOpen : d.id === 'emotion' ? MessageCircle : Link2;
-                                                return (
-                                                    <div key={d.id} className="bg-white rounded-xl p-2.5 shadow-sm border border-slate-100">
-                                                        <div className="flex items-center gap-1.5 mb-1">
-                                                            <Icon size={14} className={c.text} />
-                                                            <span className="text-[11px] font-medium text-slate-700">{d.name}</span>
-                                                        </div>
-                                                        <p className={`text-[11px] font-semibold ${c.text}`}>{d.status} {d.score}</p>
-                                                        <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mt-1">
-                                                            <div className={`h-full rounded-full ${c.bar}`} style={{ width: `${d.score}%` }} />
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                        <div className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
-                                            <div className="bg-violet-50 px-3 py-1.5 flex items-center gap-1.5">
-                                                <MessageCircle size={14} className="text-violet-600" />
-                                                <span className="text-xs font-semibold text-slate-800">近期交互评估</span>
-                                            </div>
-                                            <p className="px-3 py-2 text-[11px] leading-relaxed text-slate-600">
-                                                {cognitiveBrief.recentInteractionEvaluation}
-                                            </p>
-                                        </div>
-                                        <div className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
-                                            <div className="bg-sky-50 px-3 py-1.5 flex items-center gap-1.5">
-                                                <Heart size={14} className="text-sky-600" />
-                                                <span className="text-xs font-semibold text-slate-800">陪伴建议</span>
-                                            </div>
-                                            <p className="px-3 py-2 text-[11px] leading-relaxed text-slate-600">
-                                                {cognitiveBrief.accompanyingSuggestions}
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => setShowCognitiveReportModal(true)}
-                                            className="w-full h-10 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-colors"
-                                        >
-                                            <Brain size={14} />
-                                            查看详细认知报告
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* 健康日报完整弹窗（手机内浮层） */}
-                {showHealthReportModal && (
-                    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40">
-                        <div className="w-full max-w-sm mx-auto px-3">
-                            <div className="bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
-                                <div className="bg-gradient-to-br from-indigo-500 to-violet-500 px-5 pt-5 pb-4 text-white relative">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div>
-                                            <p className="text-xs opacity-90">
-                                                {new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
-                                            </p>
-                                            <p className="text-lg font-bold mt-1">爸爸的健康日报</p>
-                                            <p className="text-[11px] text-indigo-100/80">基于今日全天体征数据综合分析</p>
-                                        </div>
-                                        <div className="flex flex-col items-end gap-2">
-                                            <button
-                                                onClick={() => setShowHealthReportModal(false)}
-                                                className="w-7 h-7 rounded-full bg-white/15 flex items-center justify-center"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
-                                    {reportLoading && (
-                                        <div className="flex flex-col items-center justify-center py-10 text-slate-500 text-sm">
-                                            <Loader2 className="animate-spin mb-3 text-indigo-500" size={28} />
-                                            正在生成完整健康日报…
-                                        </div>
-                                    )}
-                                    {!reportLoading && reportContent && (
-                                        <div className="bg-white rounded-2xl p-4 shadow-sm">
-                                            <div className="report-markdown font-sans text-sm leading-relaxed text-slate-800">
-                                                <ReactMarkdown>{reportContent}</ReactMarkdown>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* 认知评估完整弹窗（手机内浮层） */}
-                {showCognitiveReportModal && (
-                    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40">
-                        <div className="w-full max-w-sm mx-auto px-3">
-                            <div className="bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
-                                <div className="bg-gradient-to-br from-emerald-500 to-sky-500 px-5 pt-5 pb-4 text-white relative">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div>
-                                            <p className="text-xs opacity-90">
-                                                {new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
-                                            </p>
-                                            <p className="text-lg font-bold mt-1">爸爸的认知评估</p>
-                                            <p className="text-[11px] text-emerald-100/80">基于今日对话的 NLP 深度分析</p>
-                                        </div>
-                                        <div className="flex flex-col items-end gap-2">
-                                            <button
-                                                onClick={() => setShowCognitiveReportModal(false)}
-                                                className="w-7 h-7 rounded-full bg-white/15 flex items-center justify-center"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
-                                    {cognitiveLoading && (
-                                        <div className="flex flex-col items-center justify-center py-10 text-slate-500 text-sm">
-                                            <Loader2 className="animate-spin mb-3 text-emerald-500" size={28} />
-                                            正在生成认知评估报告…
-                                        </div>
-                                    )}
-                                    {!cognitiveLoading && cognitiveContent && (
-                                        <div className="bg-white rounded-2xl p-4 shadow-sm">
-                                            <div className="report-markdown font-sans text-sm leading-relaxed text-slate-800">
-                                                <ReactMarkdown>{cognitiveContent}</ReactMarkdown>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* 健康日报完整报告弹窗 */}
-                {showHealthReportModal && reportContent && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-                        <div className="w-[92%] max-w-md max-h-[90vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-                            <div className="bg-gradient-to-br from-violet-500 to-indigo-500 px-5 pt-4 pb-3 text-white relative">
-                                <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <p className="text-xs opacity-80">
-                                            {new Date().toLocaleDateString('zh-CN', {
-                                                year: 'numeric',
-                                                month: 'long',
-                                                day: 'numeric',
-                                                weekday: 'long',
-                                            })}
-                                        </p>
-                                        <p className="mt-1 text-base font-bold">爸爸的健康日报</p>
-                                        <p className="text-[11px] text-indigo-100/80">
-                                            基于今天全天体征数据综合分析
-                                        </p>
-                                    </div>
-                                    <button
-                                        onClick={() => setShowHealthReportModal(false)}
-                                        className="w-7 h-7 flex items-center justify-center rounded-full bg-white/15 text-white/90 hover:bg-white/25"
-                                    >
-                                        <X size={14} />
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="px-5 py-4 overflow-y-auto">
-                                <div className="report-markdown font-sans text-[13px] leading-relaxed text-slate-800 [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-3 [&_h2:first-child]:mt-0 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5 [&_strong]:font-semibold">
-                                    <ReactMarkdown>{reportContent}</ReactMarkdown>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* 认知评估完整报告弹窗 */}
-                {showCognitiveReportModal && cognitiveContent && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-                        <div className="w-[92%] max-w-md max-h-[90vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-                            <div className="bg-gradient-to-br from-emerald-500 to-teal-500 px-5 pt-4 pb-3 text-white relative">
-                                <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <p className="text-xs opacity-80">
-                                            {new Date().toLocaleDateString('zh-CN', {
-                                                year: 'numeric',
-                                                month: 'long',
-                                                day: 'numeric',
-                                                weekday: 'long',
-                                            })}
-                                        </p>
-                                        <p className="mt-1 text-base font-bold">爸爸的认知评估</p>
-                                        <p className="text-[11px] text-emerald-100/80">
-                                            基于今日对话的 NLP 深度分析
-                                        </p>
-                                    </div>
-                                    <button
-                                        onClick={() => setShowCognitiveReportModal(false)}
-                                        className="w-7 h-7 flex items-center justify-center rounded-full bg-white/15 text-white/90 hover:bg-white/25"
-                                    >
-                                        <X size={14} />
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="px-5 py-4 overflow-y-auto">
-                                <div className="report-markdown font-sans text-[13px] leading-relaxed text-slate-800 [&_h2]:text-base [&_h2]:font-bold [&_h2]:mt-3 [&_h2:first-child]:mt-0 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5 [&_strong]:font-semibold">
-                                    <ReactMarkdown>{cognitiveContent}</ReactMarkdown>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-
-            </div>
-        );
-    };
-
-    const FaceAlbumTab = () => {
-        const [faces, setFaces] = useState<FaceData[]>(() => faceService.getFaces());
-        const [showAddModal, setShowAddModal] = useState(false);
-        const [form, setForm] = useState({
-            name: '',
-            relation: '',
-            imageUrl: '',
-            description: ''
-        });
-
-        const refreshList = () => setFaces(faceService.getFaces());
-
-        const handleAddSubmit = () => {
-            if (!form.name || !form.imageUrl) return;
-            faceService.addFace({
-                name: form.name,
-                relation: form.relation || '亲友',
-                imageUrl: form.imageUrl,
-                description: form.description
-            });
-            refreshList();
-            setForm({ name: '', relation: '', imageUrl: '', description: '' });
-            setShowAddModal(false);
-        };
-
-        const handleDelete = (id: string, e: React.MouseEvent) => {
-            e.stopPropagation();
-            if (confirm('确定要删除这张照片吗？')) {
-                faceService.deleteFace(id);
-                refreshList();
-            }
-        };
-
-        return (
-            <div className="flex flex-col gap-5 p-5 pb-24 animate-fade-in-up">
-                {/* 时光相册：老人端展示的回忆照片 */}
-                <div>
-                    <h2 className="text-xl font-bold text-slate-800 mb-3">时光相册</h2>
-                    <p className="text-xs text-slate-500 mb-3">老人端相册中的照片，用于回忆唤起</p>
-                    <div className="grid grid-cols-2 gap-3">
-                        {ALBUM_MEMORIES.map((photo) => (
-                            <div key={photo.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
-                                <div className="aspect-square rounded-xl overflow-hidden bg-slate-100 mb-2">
-                                    <img src={photo.url} alt={photo.location} className="w-full h-full object-cover" />
-                                </div>
-                                <h4 className="font-bold text-slate-800 text-sm truncate">{photo.location}</h4>
-                                <p className="text-xs text-slate-500 mt-0.5 truncate">{photo.date}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* 人脸相册：用于老人端人脸识别的亲属照片 */}
-                <div>
-                    <div className="flex justify-between items-center mb-3">
-                        <h2 className="text-xl font-bold text-slate-800">人脸相册</h2>
-                        <button
-                            onClick={() => setShowAddModal(true)}
-                            className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-lg shadow-indigo-200 active:scale-95"
-                        >
-                            <Plus size={16} /> 添加照片
-                        </button>
-                    </div>
-                    <p className="text-xs text-slate-500 mb-3">老人说不认识时可识别人脸，下方为预设亲属照片</p>
-
-                <div className="grid grid-cols-2 gap-4">
-                    {FACE_RECOGNITION_CONFIG.map((item) => (
-                        <div key={`preset-${item.file}`} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
-                            <div className="aspect-square rounded-xl overflow-hidden bg-slate-100 mb-3">
-                                <img src={`/faces/${item.file}`} alt={item.relation} className="w-full h-full object-cover" />
-                            </div>
-                            <h4 className="font-bold text-slate-800 text-sm text-center">{item.name || item.relation}</h4>
-                            <p className="text-xs text-slate-500 text-center mt-0.5">{item.relation}</p>
-                        </div>
-                    ))}
-                    {faces.map((face) => (
-                        <div key={face.id} className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 relative group">
-                            <button
-                                onClick={(e) => handleDelete(face.id, e)}
-                                className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                                <X size={12} />
-                            </button>
-                            <div className="aspect-square rounded-xl overflow-hidden bg-slate-100 mb-3">
-                                <img src={face.imageUrl} alt={face.name} className="w-full h-full object-cover" />
-                            </div>
-                            <h4 className="font-bold text-slate-800 text-sm text-center">{face.name}</h4>
-                            <p className="text-xs text-slate-500 text-center mt-0.5">{face.relation}</p>
-                        </div>
-                    ))}
-                </div>
-                </div>
-
-                {showAddModal && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setShowAddModal(false)}>
-                        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-                            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                                <h3 className="font-bold text-slate-800">添加人脸照片</h3>
-                                <button onClick={() => setShowAddModal(false)}><X size={20} className="text-slate-400" /></button>
-                            </div>
-                            <div className="p-4 space-y-3">
-                                <div>
-                                    <label className="text-xs font-bold text-slate-500 block mb-1">照片 URL</label>
-                                    <input type="text" value={form.imageUrl} onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" placeholder="https://..." />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 block mb-1">姓名</label>
-                                        <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" placeholder="如：张伟" />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 block mb-1">关系</label>
-                                        <input type="text" value={form.relation} onChange={e => setForm(f => ({ ...f, relation: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm" placeholder="如：儿子" />
-                                    </div>
-                                </div>
-                                <button onClick={handleAddSubmit} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold mt-2">保存照片</button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    // --- Medication Section Component (Moved from MedicationTab) ---
-    const MedicationSection = () => {
-        const [medications, setMedications] = useState<Medication[]>(() => medicationService.getMedications());
-        const [showAddModal, setShowAddModal] = useState(false);
-        const [form, setForm] = useState({
-            name: '',
-            dosage: '',
-            frequency: '每日1次',
-            timesStr: '08:00',
-            instructions: '',
-            purpose: '',
-            imageUrl: '',
-        });
-
-        const refreshList = () => setMedications(medicationService.getMedications());
-
-        const normalizeTime = (s: string): string => {
-            const t = s.trim();
-            const m = t.match(/^(\d{1,2}):(\d{2})$/);
-            if (m) return m[1].padStart(2, '0') + ':' + m[2].padStart(2, '0');
-            if (/^\d{4}$/.test(t)) return t.slice(0, 2) + ':' + t.slice(2);
-            return t;
-        };
-
-        const handleAddSubmit = () => {
-            const name = form.name.trim();
-            if (!name) return;
-            const times = form.timesStr.split(/[,，\s]+/).map(normalizeTime).filter(t => /^\d{2}:\d{2}$/.test(t));
-            medicationService.addMedication({
-                name,
-                dosage: form.dosage,
-                frequency: form.frequency,
-                times: times.length ? times : ['08:00'],
-                instructions: form.instructions,
-                purpose: form.purpose,
-                imageUrl: form.imageUrl || undefined
-            });
-            refreshList();
-            setShowAddModal(false);
-            setForm({ name: '', dosage: '', frequency: '每日1次', timesStr: '08:00', instructions: '', purpose: '', imageUrl: '' });
-        };
-
-        const todayLogs = medicationService.getTodayLogs();
-        const nowTime = new Date().toTimeString().slice(0, 5);
-
-        const getMedicationStatus = (med: Medication) => {
-            const takenToday = todayLogs.filter((l) => l.medicationId === med.id && l.status === 'taken');
-            if (takenToday.length > 0) {
-                const last = takenToday[takenToday.length - 1];
-                return { label: '已服用', cls: 'text-emerald-600 bg-emerald-100', nextTime: last.actualTime || last.scheduledTime };
-            }
-            const nextTime = med.times.find((t) => t >= nowTime) || med.times[0];
-            return { label: '待定', cls: 'text-slate-500 bg-slate-100', nextTime };
-        };
-
-        return (
-            <div className="mt-6 pt-6 border-t border-slate-200">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <Pill size={18} className="text-indigo-500" /> 用药管理
-                    </h3>
-                    <button onClick={() => setShowAddModal(true)} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg">
-                        + 添加
-                    </button>
-                </div>
-
-                <div className="space-y-3">
-                    {medications.length === 0 ? (
-                        <p className="text-center text-slate-400 text-xs py-4">暂无药物信息</p>
-                    ) : (
-                        medications.map(med => {
-                            const status = getMedicationStatus(med);
-                            return (
-                                <div key={med.id} className="flex items-center p-3 border border-slate-100 rounded-xl bg-white shadow-sm">
-                                    <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center mr-3 overflow-hidden">
-                                        {med.imageUrl ? <img src={med.imageUrl} className="w-full h-full object-cover" /> : <Pill size={16} className="text-slate-400" />}
-                                    </div>
-                                    <div className="flex-1">
-                                        <h4 className="font-bold text-slate-700 text-sm">{med.name}</h4>
-                                        <p className="text-xs text-slate-500">{med.dosage} · {med.frequency}</p>
-                                    </div>
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${status.cls}`}>{status.label}</span>
-                                </div>
-                            )
-                        })
-                    )}
-                </div>
-
-                {showAddModal && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setShowAddModal(false)}>
-                        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                            <div className="p-4 border-b border-slate-100 flex justify-between">
-                                <h3 className="font-bold">添加药物</h3>
-                                <button onClick={() => setShowAddModal(false)}><X size={18} /></button>
-                            </div>
-                            <div className="p-4 space-y-3">
-                                {/* Simplified Form for brevity in this refactor, but keeping checking fields */}
-                                <div><label className="text-xs block text-slate-500">药名</label><input className="border w-full rounded p-2 text-sm" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
-                                <div><label className="text-xs block text-slate-500">剂量</label><input className="border w-full rounded p-2 text-sm" value={form.dosage} onChange={e => setForm(f => ({ ...f, dosage: e.target.value }))} /></div>
-                                <div><label className="text-xs block text-slate-500">时间 (逗号分隔)</label><input className="border w-full rounded p-2 text-sm" value={form.timesStr} onChange={e => setForm(f => ({ ...f, timesStr: e.target.value }))} /></div>
-                                <button onClick={handleAddSubmit} className="w-full bg-indigo-600 text-white rounded-lg py-2 text-sm font-bold">保存</button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-
-
     // --- Main Render ---
 
     return (
@@ -3615,7 +3507,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                 <div className="flex-1 bg-[#F8FAFC] overflow-y-auto no-scrollbar relative pt-8">
 
                     {isSettingsOpen ? (
-                        <SettingsView />
+                        <DashboardSettingsView onClose={() => setIsSettingsOpen(false)} />
                     ) : (
                         <>
                             {/* Scrollable Header */}
@@ -3635,7 +3527,23 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                             </div>
 
                             {activeTab === 'overview' && renderOverviewTab()}
-                            {activeTab === 'health' && <HealthTab />}
+                            {activeTab === 'health' && (
+                                <DashboardHealthTab
+                                    currentMetrics={currentMetrics}
+                                    activeAiTab={activeAiTab}
+                                    setActiveAiTab={setActiveAiTab}
+                                    reportLoading={reportLoading}
+                                    reportContent={reportContent}
+                                    generateReport={generateReport}
+                                    cognitiveLoading={cognitiveLoading}
+                                    cognitiveBrief={cognitiveBrief}
+                                    cognitiveContent={cognitiveContent}
+                                    showHealthReportModal={showHealthReportModal}
+                                    setShowHealthReportModal={setShowHealthReportModal}
+                                    showCognitiveReportModal={showCognitiveReportModal}
+                                    setShowCognitiveReportModal={setShowCognitiveReportModal}
+                                />
+                            )}
                             {activeTab === 'location' && (
                                 <LocationTabContent
                                     mapContainerRef={mapContainerRef}
@@ -3664,7 +3572,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                                     environmentAnalysisLoading={environmentAnalysisLoading}
                                 />
                             )}
-                            {activeTab === 'faces' && <FaceAlbumTab />}
+                            {activeTab === 'faces' && <DashboardFaceAlbumTab />}
 
                         </>
                     )}
