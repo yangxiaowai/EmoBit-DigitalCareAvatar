@@ -297,6 +297,7 @@ const server = http.createServer(async (req, res) => {
                 payload: serialize(body.payload || {}),
                 purpose: body.purpose || 'family_control',
             });
+            console.info(`[EmoBitBridge] Queued elder action "${body.action}" for ${elderId} (${body.purpose || 'family_control'}).`);
             return sendJson(res, 200, { ok: true, elderId, result });
         }
 
@@ -418,6 +419,9 @@ async function queueElderAction(elderId, { action, payload = {}, purpose = 'fami
         metadata: { action, ...payload },
         results: [result],
     });
+
+    const sourceChannel = String(payload?.sourceChannel || 'unknown');
+    console.info(`[EmoBitBridge] Elder action ready for frontend: ${action} <- ${sourceChannel}`);
 
     return result;
 }

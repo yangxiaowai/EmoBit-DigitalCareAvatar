@@ -1,3 +1,5 @@
+import { buildGuardianMessageDelivery } from './guardianMessageControl.js';
+
 const DEFAULT_BRIDGE_BASE_URL = process.env.EMOBIT_BRIDGE_URL || 'http://127.0.0.1:4318';
 const DEFAULT_ELDER_ID = process.env.EMOBIT_ELDER_ID || 'elder_demo';
 
@@ -154,6 +156,86 @@ export default function register(api) {
   });
 
   api.registerTool({
+    name: 'emobit_deliver_guardian_message',
+    description: 'Parse a Feishu family message such as "给老人留言：..." and queue elderly-side playback as a speak_text frontend action.',
+    parameters: {
+      type: 'object',
+      properties: {
+        elderId: { type: 'string' },
+        rawText: { type: 'string' },
+        message: { type: 'string' },
+        senderName: { type: 'string' },
+        senderId: { type: 'string' },
+        elderName: { type: 'string' }
+      }
+    },
+    async execute(_id, params) {
+      const elderId = params.elderId || cfg.defaultElderId;
+      let elderName = String(params.elderName || '').trim();
+      let senderName = String(params.senderName || '').trim();
+      let elderState = null;
+
+      if (!elderName) {
+        try {
+          const state = await bridgeGet('/api/state', elderId);
+          elderState = state?.state || null;
+          elderName = String(elderState?.profile?.nickname || elderState?.profile?.name || '').trim();
+        } catch {
+          elderName = '';
+        }
+      }
+
+      if (!elderState && shouldInferGuardianSenderName(senderName, params.senderId)) {
+        try {
+          const state = await bridgeGet('/api/state', elderId);
+          elderState = state?.state || null;
+        } catch {
+          elderState = null;
+        }
+      }
+
+      if (shouldInferGuardianSenderName(senderName, params.senderId)) {
+        senderName = inferGuardianSenderName(elderState, params.senderId) || senderName;
+      }
+
+      const delivery = buildGuardianMessageDelivery({
+        rawText: params.rawText,
+        message: params.message,
+        senderName,
+        elderName,
+      });
+
+      if (!delivery.handled) {
+        return asText({
+          ok: false,
+          elderId,
+          ...delivery,
+        });
+      }
+
+      const result = await bridgePost('/api/outbound/elder-action', {
+        elderId,
+        action: delivery.action,
+        purpose: 'family_message_from_guardian',
+        payload: {
+          text: delivery.speechText,
+          originalMessage: delivery.guardianMessage,
+          senderName,
+          senderId: String(params.senderId || '').trim(),
+          sourceChannel: 'feishu',
+        },
+      });
+
+      return asText({
+        ok: true,
+        elderId,
+        ...delivery,
+        result,
+      });
+    },
+  });
+
+  api.registerTool({
     name: 'emobit_notify_guardians',
     description: 'Send a caregiver-facing notification through OpenClaw channels and record the outbound action.',
     parameters: {
@@ -306,6 +388,28 @@ export default function register(api) {
 
 function buildBridgeHeaders(cfg) {
   return cfg.bridgeToken ? { 'x-emobit-bridge-token': cfg.bridgeToken } : {};
+}
+
+function shouldInferGuardianSenderName(senderName, senderId) {
+  const normalizedSenderName = String(senderName || '').trim();
+  const normalizedSenderId = String(senderId || '').trim();
+  if (!normalizedSenderName) return true;
+  if (normalizedSenderId && normalizedSenderName === normalizedSenderId) return true;
+  return /^ou_[a-zA-Z0-9]+$/.test(normalizedSenderName);
+}
+
+function inferGuardianSenderName(elderState, senderId) {
+  const contacts = Array.isArray(elderState?.guardianContacts) ? elderState.guardianContacts : [];
+  if (contacts.length === 0) return '';
+
+  const normalizedSenderId = String(senderId || '').trim();
+  if (normalizedSenderId) {
+    const matched = contacts.find((contact) => String(contact?.senderId || '').trim() === normalizedSenderId);
+    if (matched?.name) return String(matched.name).trim();
+  }
+
+  const sorted = [...contacts].sort((a, b) => Number(a?.priority || 999) - Number(b?.priority || 999));
+  return String(sorted[0]?.name || '').trim();
 }
 
 function ensureSlash(url) {

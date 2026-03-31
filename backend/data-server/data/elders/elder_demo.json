@@ -116,7 +116,7 @@
       "memoryText": "还记得1995年那次表彰吗？您那时候可是单位的骨干呢！",
       "voiceText": "爸，这是您以前工作的地方，还记得1995年那次表彰吗？",
       "category": "work",
-      "createdAt": "2026-03-27T13:10:05.254Z"
+      "createdAt": "2026-03-31T04:20:27.397Z"
     },
     {
       "id": "demo_park",
@@ -129,7 +129,7 @@
       "memoryText": "小时候您常带我来这里喂鸽子，我还记得那个卖糖葫芦的老奶奶。",
       "voiceText": "爸，这是我们小时候常来的公园，还记得那个卖糖葫芦的老奶奶吗？",
       "category": "family",
-      "createdAt": "2026-03-27T13:10:05.254Z"
+      "createdAt": "2026-03-31T04:20:27.397Z"
     },
     {
       "id": "demo_home",
@@ -142,7 +142,7 @@
       "memoryText": "欢迎回家！今天累了吧，进屋喝杯热茶。",
       "voiceText": "爸，快到家啦！我给您沏好茶了。",
       "category": "daily",
-      "createdAt": "2026-03-27T13:10:05.254Z"
+      "createdAt": "2026-03-31T04:20:27.397Z"
     }
   ],
   "memoryEvents": [],
@@ -252,6 +252,33 @@
       "actualTime": "15:04",
       "status": "taken",
       "date": "2026-03-23"
+    },
+    {
+      "id": "log_1774664037132",
+      "medicationId": "med_2",
+      "medicationName": "二甲双胍",
+      "scheduledTime": "09:59",
+      "actualTime": "10:13",
+      "status": "taken",
+      "date": "2026-03-28"
+    },
+    {
+      "id": "log_1774776115903",
+      "medicationId": "med_2",
+      "medicationName": "二甲双胍",
+      "scheduledTime": "17:20",
+      "actualTime": "17:21",
+      "status": "taken",
+      "date": "2026-03-29"
+    },
+    {
+      "id": "log_1774776131390",
+      "medicationId": "med_2",
+      "medicationName": "二甲双胍",
+      "scheduledTime": "17:22",
+      "actualTime": "17:22",
+      "status": "taken",
+      "date": "2026-03-29"
     }
   ],
   "medicationEvents": [
@@ -1243,6 +1270,48 @@
         "topics": [
           "空间定向"
         ]
+      },
+      {
+        "id": "conv_1774662113463",
+        "userMessage": "今天星期几？我是不是忘记吃药了？",
+        "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+        "timestamp": "2026-03-28T01:41:53.463Z",
+        "sentiment": "neutral",
+        "topics": [
+          "时间定向",
+          "服药"
+        ]
+      },
+      {
+        "id": "conv_1774662113467",
+        "userMessage": "我现在在哪里？",
+        "aiResponse": "您现在在家里，客厅很安全。",
+        "timestamp": "2026-03-28T01:41:53.467Z",
+        "sentiment": "neutral",
+        "topics": [
+          "空间定向"
+        ]
+      },
+      {
+        "id": "conv_1774663973950",
+        "userMessage": "今天星期几？我是不是忘记吃药了？",
+        "aiResponse": "今天是星期三，您晚饭后的药还没吃，我会提醒您。",
+        "timestamp": "2026-03-28T02:12:53.950Z",
+        "sentiment": "neutral",
+        "topics": [
+          "时间定向",
+          "服药"
+        ]
+      },
+      {
+        "id": "conv_1774663973954",
+        "userMessage": "我现在在哪里？",
+        "aiResponse": "您现在在家里，客厅很安全。",
+        "timestamp": "2026-03-28T02:12:53.954Z",
+        "sentiment": "neutral",
+        "topics": [
+          "空间定向"
+        ]
       }
     ],
     "assessments": [
@@ -1465,22 +1534,102 @@
         "maxScore": 2,
         "notes": "近阶段相似问题出现 6 次。",
         "timestamp": "2026-03-23T07:14:18.764Z"
+      },
+      {
+        "id": "cog_1774662113466_time",
+        "category": "time_orientation",
+        "prompt": "时间定向",
+        "response": "今天星期几？我是不是忘记吃药了？",
+        "score": 0,
+        "maxScore": 1,
+        "notes": "重复询问时间，建议持续观察时间定向能力。",
+        "timestamp": "2026-03-28T01:41:53.466Z"
+      },
+      {
+        "id": "cog_1774662113466_repeat",
+        "category": "memory_repetition",
+        "prompt": "重复提问",
+        "response": "今天星期几？我是不是忘记吃药了？",
+        "score": 0,
+        "maxScore": 2,
+        "notes": "近阶段相似问题出现 7 次。",
+        "timestamp": "2026-03-28T01:41:53.466Z"
+      },
+      {
+        "id": "cog_1774662113470_location",
+        "category": "location_orientation",
+        "prompt": "地点定向",
+        "response": "我现在在哪里？",
+        "score": 0,
+        "maxScore": 1,
+        "notes": "出现地点/路线困惑信号。",
+        "timestamp": "2026-03-28T01:41:53.470Z"
+      },
+      {
+        "id": "cog_1774662113470_repeat",
+        "category": "memory_repetition",
+        "prompt": "重复提问",
+        "response": "我现在在哪里？",
+        "score": 0,
+        "maxScore": 2,
+        "notes": "近阶段相似问题出现 7 次。",
+        "timestamp": "2026-03-28T01:41:53.470Z"
+      },
+      {
+        "id": "cog_1774663973953_time",
+        "category": "time_orientation",
+        "prompt": "时间定向",
+        "response": "今天星期几？我是不是忘记吃药了？",
+        "score": 0,
+        "maxScore": 1,
+        "notes": "重复询问时间，建议持续观察时间定向能力。",
+        "timestamp": "2026-03-28T02:12:53.953Z"
+      },
+      {
+        "id": "cog_1774663973953_repeat",
+        "category": "memory_repetition",
+        "prompt": "重复提问",
+        "response": "今天星期几？我是不是忘记吃药了？",
+        "score": 0,
+        "maxScore": 2,
+        "notes": "近阶段相似问题出现 8 次。",
+        "timestamp": "2026-03-28T02:12:53.953Z"
+      },
+      {
+        "id": "cog_1774663973954_location",
+        "category": "location_orientation",
+        "prompt": "地点定向",
+        "response": "我现在在哪里？",
+        "score": 0,
+        "maxScore": 1,
+        "notes": "出现地点/路线困惑信号。",
+        "timestamp": "2026-03-28T02:12:53.954Z"
+      },
+      {
+        "id": "cog_1774663973955_repeat",
+        "category": "memory_repetition",
+        "prompt": "重复提问",
+        "response": "我现在在哪里？",
+        "score": 0,
+        "maxScore": 2,
+        "notes": "近阶段相似问题出现 8 次。",
+        "timestamp": "2026-03-28T02:12:53.955Z"
       }
     ],
     "reports": []
   },
   "sundowning": {
     "snapshot": {
-      "timestamp": 1774617797317,
-      "riskScore": 27,
+      "timestamp": 1774936743342,
+      "riskScore": 17,
       "riskLevel": "low",
       "trend": "stable",
       "timeWindowWeight": 0,
       "behaviorSummary": {
-        "confusionScore": 25,
+        "confusionScore": 12,
         "repeatedQuestions": 0,
-        "stepAnomalyScore": 28,
-        "agitationScore": 25
+        "stepAnomalyScore": 18,
+        "agitationScore": 10
       },
       "keyFactors": [
         "目前信号平稳"
@@ -7775,6 +7924,28 @@
   ],
   "outboundEvents": [
     {
+      "timestamp": "2026-03-31T02:32:14.980Z",
+      "audience": "elder",
+      "channel": "frontend",
+      "targets": [
+        "ui:elder-app"
+      ],
+      "message": "{\"action\":\"speak_text\",\"payload\":{\"text\":\"张爷爷，张明刚刚在飞书里说晚上会给您打电话。\"}}",
+      "purpose": "family_control",
+      "metadata": {
+        "action": "speak_text",
+        "text": "张爷爷，张明刚刚在飞书里说晚上会给您打电话。"
+      },
+      "results": [
+        {
+          "channel": "frontend",
+          "target": "ui:elder-app",
+          "stdout": "Queued elder frontend action.",
+          "stderr": ""
+        }
+      ]
+    },
+    {
       "timestamp": "2026-03-23T07:03:12.898Z",
       "audience": "elder",
       "channel": "frontend",
@@ -8998,6 +9169,29 @@
   ],
   "uiCommands": [
     {
+      "id": "ui_1774924335002_0x0jiw",
+      "type": "outbound.recorded",
+      "timestamp": 1774924335002,
+      "payload": {
+        "audience": "elder",
+        "channel": "frontend",
+        "targets": [
+          "ui:elder-app"
+        ],
+        "purpose": "family_control",
+        "message": "{\"action\":\"speak_text\",\"payload\":{\"text\":\"张爷爷，张明刚刚在飞书里说晚上会给您打电话。\"}}"
+      }
+    },
+    {
+      "id": "ui_1774924334954_fcwm3d",
+      "type": "elder.action",
+      "timestamp": 1774924334954,
+      "payload": {
+        "action": "speak_text",
+        "text": "张爷爷，张明刚刚在飞书里说晚上会给您打电话。"
+      }
+    },
+    {
       "id": "ui_1774249392898_lia16t",
       "type": "outbound.recorded",
       "timestamp": 1774249392898,
@@ -10147,10 +10341,10 @@
         "sourceText": "明天上午9点去静安区中心医院复诊",
         "instructions": "提前准备医保卡和病历",
         "lastCompletedAt": null,
-        "lastTriggeredAt": null,
+        "lastTriggeredAt": "2026-03-28T01:00:48.647Z",
         "id": "care_1773841098537_n377",
         "createdAt": "2026-03-18T13:38:18.537Z",
-        "updatedAt": "2026-03-18T13:38:18.537Z"
+        "updatedAt": "2026-03-28T01:00:48.647Z"
       },
       {
         "id": "care_default_water",
@@ -10165,6 +10359,40 @@
         "updatedAt": "2026-03-23T07:00:41.886Z",
         "lastCompletedAt": null,
         "lastTriggeredAt": "2026-03-23T07:00:41.886Z"
+      },
+      {
+        "type": "medication",
+        "title": "二甲双胍 用药提醒",
+        "time": "20:00",
+        "recurrence": "daily",
+        "enabled": true,
+        "createdBy": "voice",
+        "medicationName": "二甲双胍",
+        "dosage": "500mg一片",
+        "instructions": "饭后服用",
+        "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+        "lastCompletedAt": null,
+        "lastTriggeredAt": null,
+        "id": "care_1774663967945_0w01",
+        "createdAt": "2026-03-28T02:12:47.945Z",
+        "updatedAt": "2026-03-28T02:12:47.945Z"
+      },
+      {
+        "type": "medication",
+        "title": "二甲双胍 用药提醒",
+        "time": "20:00",
+        "recurrence": "daily",
+        "enabled": true,
+        "createdBy": "voice",
+        "medicationName": "二甲双胍",
+        "dosage": "500mg一片",
+        "instructions": "饭后服用",
+        "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+        "lastCompletedAt": null,
+        "lastTriggeredAt": null,
+        "id": "care_1774663761550_fxn9",
+        "createdAt": "2026-03-28T02:09:21.550Z",
+        "updatedAt": "2026-03-28T02:09:21.550Z"
       },
       {
         "type": "medication",
@@ -10216,6 +10444,101 @@
       }
     ],
     "events": [
+      {
+        "id": "care_evt_1774663967945_5djp",
+        "type": "created",
+        "itemId": "care_1774663967945_0w01",
+        "item": {
+          "type": "medication",
+          "title": "二甲双胍 用药提醒",
+          "time": "20:00",
+          "recurrence": "daily",
+          "enabled": true,
+          "createdBy": "voice",
+          "medicationName": "二甲双胍",
+          "dosage": "500mg一片",
+          "instructions": "饭后服用",
+          "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+          "lastCompletedAt": null,
+          "lastTriggeredAt": null,
+          "id": "care_1774663967945_0w01",
+          "createdAt": "2026-03-28T02:12:47.945Z",
+          "updatedAt": "2026-03-28T02:12:47.945Z"
+        },
+        "timestamp": "2026-03-28T02:12:47.945Z",
+        "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用"
+      },
+      {
+        "id": "care_evt_1774663761550_0kt8",
+        "type": "created",
+        "itemId": "care_1774663761550_fxn9",
+        "item": {
+          "type": "medication",
+          "title": "二甲双胍 用药提醒",
+          "time": "20:00",
+          "recurrence": "daily",
+          "enabled": true,
+          "createdBy": "voice",
+          "medicationName": "二甲双胍",
+          "dosage": "500mg一片",
+          "instructions": "饭后服用",
+          "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用",
+          "lastCompletedAt": null,
+          "lastTriggeredAt": null,
+          "id": "care_1774663761550_fxn9",
+          "createdAt": "2026-03-28T02:09:21.550Z",
+          "updatedAt": "2026-03-28T02:09:21.550Z"
+        },
+        "timestamp": "2026-03-28T02:09:21.550Z",
+        "sourceText": "每天晚上8点在餐桌旁吃二甲双胍500mg一片，饭后服用"
+      },
+      {
+        "id": "care_evt_1774659648650_rz81",
+        "type": "reminder_triggered",
+        "itemId": "care_1773841098537_n377",
+        "item": {
+          "type": "followup",
+          "title": "静安区中心医院复诊 复诊提醒",
+          "time": "09:00",
+          "recurrence": "once",
+          "enabled": true,
+          "createdBy": "voice",
+          "location": "静安区中心医院复诊",
+          "sourceText": "明天上午9点去静安区中心医院复诊",
+          "instructions": "提前准备医保卡和病历",
+          "lastCompletedAt": null,
+          "lastTriggeredAt": "2026-03-28T01:00:48.647Z",
+          "id": "care_1773841098537_n377",
+          "createdAt": "2026-03-18T13:38:18.537Z",
+          "updatedAt": "2026-03-28T01:00:48.647Z"
+        },
+        "timestamp": "2026-03-28T01:00:48.650Z",
+        "note": "scheduled",
+        "sourceText": "明天上午9点去静安区中心医院复诊"
+      },
+      {
+        "id": "care_evt_1774659648647_ayit",
+        "type": "updated",
+        "itemId": "care_1773841098537_n377",
+        "item": {
+          "type": "followup",
+          "title": "静安区中心医院复诊 复诊提醒",
+          "time": "09:00",
+          "recurrence": "once",
+          "enabled": true,
+          "createdBy": "voice",
+          "location": "静安区中心医院复诊",
+          "sourceText": "明天上午9点去静安区中心医院复诊",
+          "instructions": "提前准备医保卡和病历",
+          "lastCompletedAt": null,
+          "lastTriggeredAt": "2026-03-28T01:00:48.647Z",
+          "id": "care_1773841098537_n377",
+          "createdAt": "2026-03-18T13:38:18.537Z",
+          "updatedAt": "2026-03-28T01:00:48.647Z"
+        },
+        "timestamp": "2026-03-28T01:00:48.648Z",
+        "sourceText": "明天上午9点去静安区中心医院复诊"
+      },
       {
         "id": "care_evt_1774616404970_d6f2",
         "type": "reminder_triggered",
@@ -10428,7 +10751,7 @@
       "lastKnownLocation": {
         "latitude": 31.2193,
         "longitude": 121.43858,
-        "timestamp": 1774249472431
+        "timestamp": 1774877195735
       },
       "lastEventType": "arrived_home"
     },
@@ -10436,10 +10759,32 @@
   },
   "faceEvents": [],
   "version": 1,
-  "updatedAt": "2026-03-27T13:23:17.414Z",
+  "updatedAt": "2026-03-31T05:59:03.508Z",
   "faces": [],
   "timeAlbum": [],
   "outbound": [
+    {
+      "timestamp": "2026-03-31T02:32:14.980Z",
+      "audience": "elder",
+      "channel": "frontend",
+      "targets": [
+        "ui:elder-app"
+      ],
+      "message": "{\"action\":\"speak_text\",\"payload\":{\"text\":\"张爷爷，张明刚刚在飞书里说晚上会给您打电话。\"}}",
+      "purpose": "family_control",
+      "metadata": {
+        "action": "speak_text",
+        "text": "张爷爷，张明刚刚在飞书里说晚上会给您打电话。"
+      },
+      "results": [
+        {
+          "channel": "frontend",
+          "target": "ui:elder-app",
+          "stdout": "Queued elder frontend action.",
+          "stderr": ""
+        }
+      ]
+    },
     {
       "timestamp": "2026-03-23T07:03:12.898Z",
       "audience": "elder",

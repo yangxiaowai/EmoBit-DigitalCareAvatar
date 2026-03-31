@@ -47,6 +47,10 @@ export EMOBIT_GUARDIAN_CALL_TO=13800138001
 
 - `TypeError: Cannot set properties of undefined (setting 'state')`（`applyStateUpdate`）：多为 `openclaw/bridge/data/state.json` 里某位老人缺少新版字段（如 `locationAutomation`）。Bridge 已在读取时自动 `ensureElderShape` 补全；若仍异常，可停 Bridge 后备份并删除 `state.json` 让 Bridge 重建。
 - `Error: spawn openclaw ENOENT`：当前 shell 的 `PATH` 里找不到 `openclaw` 可执行文件。安装 OpenClaw CLI 并保证在 PATH 中，或设置 `OPENCLAW_CLI` 为绝对路径。
+- 飞书发了消息但 Bridge 没反应：这是正常现象。飞书入站先到 `OpenClaw Gateway`，不是直接打到 bridge。要检查三件事：
+  - `OPENCLAW_GATEWAY_URL` 对应的本地 gateway 已经启动，例如 `http://127.0.0.1:18789/healthz` 可访问
+  - `OPENCLAW_AGENT_ID` 必须和 OpenClaw 里实际绑定飞书的 agent 一致
+  - 若使用飞书群聊，`~/.openclaw/openclaw.json` 里的 `channels.feishu.groupPolicy` 若为 `allowlist`，必须补 `groupAllowFrom`；否则群消息会被静默丢弃
 
 启动：
 
@@ -203,7 +207,9 @@ node openclaw/scripts/bootstrap-cron.mjs --dry-run
 ### 家属飞书反控前端
 
 - OpenClaw 新增 `emobit_control_elder_frontend`
+- OpenClaw 新增 `emobit_deliver_guardian_message`
 - 可以把飞书侧家属指令转换成 `elder.action`
+- 留言场景推荐直接让 agent 调 `emobit_deliver_guardian_message`，它会自动把飞书文本转换成 `speak_text`
 - 当前支持动作：
   - `speak_text`
   - `open_memory_album`
@@ -211,6 +217,15 @@ node openclaw/scripts/bootstrap-cron.mjs --dry-run
   - `show_care_plan`
   - `start_breathing`
 - 前端会轮询 bridge 并把这些动作直接映射到老人端数字人
+- 当前留言指令示例：
+  - `给老人留言：今晚降温了，记得关窗。`
+  - `播放家属信息：明天中午我来看您。`
+  - `留言：爸，晚饭后别忘了吃药。`
+- 预期链路：
+  - 家属在飞书给 OpenClaw 机器人发消息
+  - agent 调 `emobit_deliver_guardian_message`
+  - plugin 回写 bridge `/api/outbound/elder-action`
+  - 老人端轮询到 `elder.action(speak_text)` 后开始播报
 
 ### 趋势分析 / 连续多天照护
 

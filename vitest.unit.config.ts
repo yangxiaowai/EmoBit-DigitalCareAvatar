@@ -14,6 +14,7 @@ export default defineConfig({
       'utils/**/*.{test,spec}.ts',
       'services/**/*.{test,spec}.ts',
       'backend/**/*.{test,spec}.{ts,js}',
+      'openclaw/**/*.{test,spec}.{ts,js}',
     ],
     exclude: [
       '**/*.{test,spec}.tsx',
