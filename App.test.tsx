@@ -41,10 +41,10 @@ vi.mock('./components/ElderlyApp', () => {
 
 vi.mock('./components/Sidebar', () => {
   return {
-    default: ({ onSimulate }: { onSimulate: (t: SimulationType) => void }) => (
+    default: ({ onScenarioRequest, onReset }: { onScenarioRequest: (t: SimulationType) => void; onReset: () => void }) => (
       <div>
-        <button onClick={() => onSimulate(SimulationType.FALL)}>__SIM_FALL__</button>
-        <button onClick={() => onSimulate(SimulationType.NONE)}>__SIM_RESET__</button>
+        <button onClick={() => onScenarioRequest(SimulationType.FALL)}>__SIM_FALL__</button>
+        <button onClick={onReset}>__SIM_RESET__</button>
       </div>
     ),
   };
@@ -71,8 +71,16 @@ vi.mock('./services/openclawSyncService', () => {
     openclawSyncService: {
       isEnabled: () => false,
       getElderId: () => 'elder_demo',
+      getBaseUrl: () => '',
       emitScenarioSignal: vi.fn(),
     },
+  };
+});
+
+vi.mock('./services/dataBackendClient', () => {
+  return {
+    restoreAppShellFromDataBackend: vi.fn(async () => null),
+    syncAppShellState: vi.fn(async () => true),
   };
 });
 

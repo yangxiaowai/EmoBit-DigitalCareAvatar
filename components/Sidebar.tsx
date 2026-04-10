@@ -5,11 +5,12 @@ import { MapPin, Activity, Pill, RotateCcw, Terminal, Cpu, Mic, Navigation, Imag
 
 interface SidebarProps {
   currentSimulation: SimulationType;
-  onSimulate: (type: SimulationType) => void;
+  onScenarioRequest: (type: SimulationType) => void;
+  onReset: () => void;
   logs: LogEntry[];
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentSimulation, onSimulate, logs }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentSimulation, onScenarioRequest, onReset, logs }) => {
   return (
     <aside className="w-80 h-full bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shadow-2xl z-20 shrink-0">
       
@@ -20,7 +21,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSimulation, onSimulate, logs }
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">系统突发事件模拟</h2>
         <div className="space-y-2 mb-6">
           <button
-            onClick={() => onSimulate(SimulationType.WANDERING)}
+            onClick={() => onScenarioRequest(SimulationType.WANDERING)}
             className={`w-full group relative flex items-start p-3 rounded-xl border transition-all duration-200 text-left ${
               currentSimulation === SimulationType.WANDERING
                 ? 'bg-amber-600/20 border-amber-500/50 text-amber-300'
@@ -36,7 +37,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSimulation, onSimulate, logs }
           </button>
 
           <button
-            onClick={() => onSimulate(SimulationType.FALL)}
+            onClick={() => onScenarioRequest(SimulationType.FALL)}
             className={`w-full group relative flex items-start p-3 rounded-xl border transition-all duration-200 text-left ${
               currentSimulation === SimulationType.FALL
                 ? 'bg-rose-600/20 border-rose-500/50 text-rose-300'
@@ -58,7 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSimulation, onSimulate, logs }
         </h2>
         <div className="space-y-2">
             <button
-            onClick={() => onSimulate(SimulationType.VOICE_NAV_START)}
+            onClick={() => onScenarioRequest(SimulationType.VOICE_NAV_START)}
             className={`w-full group relative flex items-start p-3 rounded-xl border transition-all duration-200 text-left ${
               currentSimulation === SimulationType.VOICE_NAV_START
                 ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300'
@@ -75,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSimulation, onSimulate, logs }
           </button>
 
           <button
-            onClick={() => onSimulate(SimulationType.VOICE_MEMORY_START)}
+            onClick={() => onScenarioRequest(SimulationType.VOICE_MEMORY_START)}
             className={`w-full group relative flex items-start p-3 rounded-xl border transition-all duration-200 text-left ${
               currentSimulation === SimulationType.VOICE_MEMORY_START
                 ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300'
@@ -92,7 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSimulation, onSimulate, logs }
           </button>
 
           <button
-            onClick={() => onSimulate(SimulationType.VOICE_MEDS_START)}
+            onClick={() => onScenarioRequest(SimulationType.VOICE_MEDS_START)}
             className={`w-full group relative flex items-start p-3 rounded-xl border transition-all duration-200 text-left ${
               currentSimulation === SimulationType.VOICE_MEDS_START
                 ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300'
@@ -110,7 +111,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSimulation, onSimulate, logs }
         </div>
 
         <button
-          onClick={() => onSimulate(SimulationType.NONE)}
+          onClick={onReset}
           className="w-full mt-8 py-3 px-4 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 hover:bg-slate-800 transition-colors text-xs font-medium flex items-center justify-center gap-2"
         >
           <RotateCcw size={14} />

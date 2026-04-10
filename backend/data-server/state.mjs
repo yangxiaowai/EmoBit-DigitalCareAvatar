@@ -48,6 +48,14 @@ export function defaultElderState(now = new Date().toISOString()) {
             state: null,
             events: [],
         },
+        appShell: {
+            activeView: 'dashboard',
+            simulation: 'NONE',
+            systemStatus: 'NORMAL',
+            elderMessage: null,
+            elderAction: null,
+            updatedAt: now,
+        },
         faces: [],
         faceEvents: [],
         timeAlbum: [],
@@ -135,6 +143,17 @@ export function ensureElderShape(input) {
         ensureArrayField(elder.locationAutomation, 'events');
     }
 
+    if (!isObject(elder.appShell)) {
+        elder.appShell = cloneValue(defaults.appShell);
+    } else {
+        if (!('activeView' in elder.appShell)) elder.appShell.activeView = 'dashboard';
+        if (!('simulation' in elder.appShell)) elder.appShell.simulation = 'NONE';
+        if (!('systemStatus' in elder.appShell)) elder.appShell.systemStatus = 'NORMAL';
+        if (!('elderMessage' in elder.appShell)) elder.appShell.elderMessage = null;
+        if (!('elderAction' in elder.appShell)) elder.appShell.elderAction = null;
+        if (!('updatedAt' in elder.appShell)) elder.appShell.updatedAt = new Date().toISOString();
+    }
+
     if (!isObject(elder.sundowning)) {
         elder.sundowning = cloneValue(defaults.sundowning);
     } else {
@@ -186,6 +205,9 @@ export function applyStateUpdate(elder, key, payload) {
             return;
         case 'locationautomation':
             applyLocationAutomationUpdate(elder, resolvePayloadValue(payload));
+            return;
+        case 'appshell':
+            applyAppShellUpdate(elder, resolvePayloadValue(payload));
             return;
         case 'wanderingconfig':
             elder.wanderingConfig = {
@@ -405,6 +427,15 @@ function applyLocationAutomationUpdate(elder, payload) {
     if (Array.isArray(source.events)) {
         elder.locationAutomation.events = toLimitedArray(source.events, MAX_EVENTS);
     }
+}
+
+function applyAppShellUpdate(elder, payload) {
+    const source = isObject(payload) ? payload : {};
+    elder.appShell = {
+        ...serialize(elder.appShell || {}),
+        ...serialize(source),
+        updatedAt: source.updatedAt || new Date().toISOString(),
+    };
 }
 
 function applyWanderingUpdate(elder, payload) {

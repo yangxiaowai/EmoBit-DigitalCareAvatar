@@ -167,6 +167,30 @@ describe('system/bridge-data-backend integration', () => {
         expect(elder.outbound.length).toBe(elder.outboundEvents.length);
     });
 
+    it('appShell section 可持久化前端壳状态，供刷新恢复使用', async () => {
+        await client.updateSection('elder_test', 'appShell', {
+            activeView: 'app',
+            simulation: 'WANDERING',
+            systemStatus: 'WARNING',
+            elderMessage: {
+                id: 'message-1',
+                text: '请先原地等待，我正在联系家属。',
+                purpose: 'safety_guidance',
+            },
+        });
+
+        const elder = await client.getElder('elder_test');
+        expect(elder.appShell).toMatchObject({
+            activeView: 'app',
+            simulation: 'WANDERING',
+            systemStatus: 'WARNING',
+        });
+        expect(elder.appShell.elderMessage).toMatchObject({
+            id: 'message-1',
+            text: '请先原地等待，我正在联系家属。',
+        });
+    });
+
     // ─── 并发写入不丢事件 ──────────────────────────────────────────────
 
     it('并发发送 10 条事件全部持久化，不丢失', async () => {
@@ -259,7 +283,7 @@ describe('system/bridge-data-backend integration', () => {
         const requiredTopLevelKeys = [
             'profile', 'health', 'cognitive', 'medications',
             'carePlan', 'wandering', 'locationAutomation',
-            'sundowning', 'events', 'outbound', 'uiCommands',
+            'sundowning', 'appShell', 'events', 'outbound', 'uiCommands',
             'faces', 'timeAlbum',
         ];
 
