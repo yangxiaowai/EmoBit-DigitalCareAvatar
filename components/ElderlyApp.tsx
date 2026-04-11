@@ -28,9 +28,10 @@ import {
 } from '../services/sundowningService';
 import AvatarCreator from './AvatarCreator';
 import ARNavigationOverlay from './ARNavigationOverlay';
-import WanderingAlert from './WanderingAlert';
-import MedicationReminder from './MedicationReminder';
 import CognitiveReport from './CognitiveReport';
+import { MobileShellFrame } from './elderly/layers/MobileShellFrame';
+import { CompanionHomeLayer } from './elderly/layers/CompanionHomeLayer';
+import { CareSceneOverlayLayer, CareSceneType } from './elderly/layers/CareSceneOverlayLayer';
 
 interface ElderlyAppProps {
     status: SystemStatus;
@@ -48,32 +49,6 @@ interface ElderlyAppProps {
         timestamp?: number;
     } | null;
 }
-
-// --- Video Avatar Component ---
-const VideoAvatar = ({ isTalking, isListening }: { isTalking: boolean, isListening: boolean }) => {
-    return (
-        <div className={`relative w-[260px] h-[260px] rounded-[3rem] overflow-hidden shadow-2xl transition-all duration-500 flex items-center justify-center bg-slate-100
-            ${isTalking ? "scale-105" : "scale-100"}
-        `}>
-            {/* Interaction Glow */}
-            {isTalking && <div className="absolute inset-0 bg-indigo-400 rounded-[3rem] blur-2xl opacity-40 animate-pulse pointer-events-none z-20"></div>}
-            {isListening && <div className="absolute inset-0 bg-emerald-400 rounded-[3rem] blur-2xl opacity-40 animate-pulse pointer-events-none z-20"></div>}
-            
-            {/* Video Player */}
-            <video 
-                src="/avatar.mp4" 
-                autoPlay 
-                loop 
-                muted 
-                playsInline
-                className="w-full h-full object-cover relative z-10"
-                onError={(e) => {
-                    e.currentTarget.parentElement.innerHTML = `<div class="w-full h-full flex flex-col items-center justify-center text-slate-400 p-4 text-center bg-slate-50"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="m9 8 6 4-6 4Z"/></svg><p class="text-sm font-medium">请将视频重命名为<br/>avatar.mp4<br/>并上传到 public 文件夹</p></div>`;
-                }}
-            />
-        </div>
-    );
-};
 
 // --- Sub-Components (Full Screen Scenarios) ---
 
@@ -613,7 +588,7 @@ const FAMILY_CONSOLE_CAPTURE_SCENARIOS = {
         title: 'S5 忘记吃药/到点提醒',
         presetInput: '预设输入：到点未服药，触发药物提醒弹层。',
         expectedUi: [
-            '老人端出现 MedicationReminder 弹层（该吃药啦）',
+            '老人端出现统一 MedicationScene 全屏场景卡（该吃药）',
             '控制台出现「已触发未服药提醒」',
             '可截图弹层药名/时间 + 控制台结果',
         ],
@@ -622,7 +597,7 @@ const FAMILY_CONSOLE_CAPTURE_SCENARIOS = {
         title: 'S6 黄昏综合征异常',
         presetInput: '预设输入：进入黄昏守护高风险模拟，触发干预卡片。',
         expectedUi: [
-            '老人端底部出现黄昏守护风险卡片（中/高风险）',
+            '老人端出现统一 SundowningScene 全屏场景卡（风险+干预+呼吸指导）',
             '控制台出现「已触发黄昏异常守护场景」',
             '可截图风险指数/干预状态 + 控制台结果',
         ],
@@ -676,6 +651,8 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
 
     // Scenario Flow State
     const [activeScenario, setActiveScenario] = useState<'none' | 'nav' | 'meds' | 'memory' | 'face'>('none');
+    const [activeCareScene, setActiveCareScene] = useState<CareSceneType>('none');
+    const [careSceneMedicationName, setCareSceneMedicationName] = useState<string>('日常药物');
     const [step, setStep] = useState(0);
     const [voiceInputDisplay, setVoiceInputDisplay] = useState<string | null>(null);
 
@@ -758,6 +735,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
 
         VoiceService.stop();
         setActiveScenario('none');
+        setActiveCareScene('none');
         setStep(0);
         setVoiceInputDisplay(null);
         setIsListening(false);
@@ -912,6 +890,21 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
         setCognitiveTrendAverage(cognitiveService.getTrend().average);
     }, []);
 
+    const openCareScene = useCallback((scene: CareSceneType, medicationName?: string) => {
+        if (scene !== 'none') {
+            setActiveScenario('none');
+            setStep(0);
+        }
+        if (medicationName) {
+            setCareSceneMedicationName(medicationName);
+        }
+        setActiveCareScene(scene);
+    }, []);
+
+    const closeCareScene = useCallback(() => {
+        setActiveCareScene('none');
+    }, []);
+
     useEffect(() => {
         const unsubCare = carePlanService.subscribe(() => {
             refreshFamilyCarePanel();
@@ -925,8 +918,46 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
         };
     }, [refreshFamilyCarePanel]);
 
+    useEffect(() => {
+        const unsubscribeWandering = wanderingService.subscribe((event) => {
+            if (event.type === 'wandering_start' || event.type === 'left_safe_zone') {
+                openCareScene('wandering');
+            }
+            if (event.type === 'wandering_end' || event.type === 'returned_safe') {
+                closeCareScene();
+            }
+        });
+
+        return () => unsubscribeWandering();
+    }, [openCareScene, closeCareScene]);
+
+    useEffect(() => {
+        medicationService.startMonitoring();
+        const unsubscribeMedication = medicationService.subscribe((event) => {
+            if (event.type === 'reminder') {
+                setCareSceneMedicationName(event.medication.name);
+                openCareScene('medication', event.medication.name);
+            }
+            if (event.type === 'taken' || event.type === 'snooze') {
+                closeCareScene();
+            }
+        });
+
+        return () => {
+            unsubscribeMedication();
+            medicationService.stopMonitoring();
+        };
+    }, [openCareScene, closeCareScene]);
+
     // 呼吸练习引导：吸气 4 秒 -> 停 2 秒 -> 呼气 6 秒
     const breathingGuideSteps = ['吸气 4 秒', '屏息 2 秒', '呼气 6 秒'];
+
+    useEffect(() => {
+        if (activeScenario !== 'none' && activeCareScene !== 'none') {
+            setActiveCareScene('none');
+        }
+    }, [activeScenario, activeCareScene]);
+
     useEffect(() => {
         if (!showBreathingGuide) return;
 
@@ -950,6 +981,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
         if (simulation === SimulationType.NONE) {
             sundowningService.stopSimulation();
             setActiveScenario('none');
+            setActiveCareScene('none');
             setStep(0);
             setVoiceInputDisplay(null);
             setAiMessage("张爷爷，我在呢。今天天气不错。");
@@ -971,6 +1003,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
         else if (simulation === SimulationType.FALL || simulation === SimulationType.WANDERING || simulation === SimulationType.MEDICATION) {
             sundowningService.stopSimulation();
             setActiveScenario('none');
+            setActiveCareScene('none');
         }
 
     }, [simulation]);
@@ -1700,6 +1733,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
     // 打开相册（时光回忆录）
     const openAlbum = useCallback(() => {
         VoiceService.stop();
+        setActiveCareScene('none');
         setAiMessage("好的，让我们一起翻翻老照片。");
         setIsTalking(true);
         setTimeout(() => {
@@ -1925,6 +1959,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
         const speech = String(payload.text || payload.message || '').trim();
 
         setActiveScenario('none');
+        setActiveCareScene('none');
         setStep(0);
 
         if (action === 'open_memory_album') {
@@ -1936,6 +1971,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
             const line = speech || '张爷爷，我们一起做一个呼吸放松练习，慢慢吸气，再慢慢呼气。';
             setShowBreathingGuide(true);
             setBreathingGuideIndex(0);
+            openCareScene('sundowning');
             setAiMessage(line);
             setIsTalking(true);
             VoiceService.speak(line, undefined, undefined, () => {
@@ -1947,7 +1983,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
         if (action === 'show_medication') {
             const line = speech || '张爷爷，我来带您看看今天的用药安排，按时吃药身体会更稳一点。';
             setAiMessage(line);
-            setActiveScenario('meds');
+            openCareScene('medication');
             setIsTalking(true);
             VoiceService.speak(line, undefined, undefined, () => {
                 setIsTalking(false);
@@ -2013,7 +2049,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
                 setIsTalking(false);
             }).catch(() => setIsTalking(false));
         }
-    }, [openAlbum]);
+    }, [openAlbum, openCareScene]);
 
     const setFamilyScenarioGuide = useCallback(
         (scenarioKey: keyof typeof FAMILY_CONSOLE_CAPTURE_SCENARIOS) => {
@@ -2057,6 +2093,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
                     break;
                 case 'S6_sundowning_alert':
                     sundowningService.startSimulation();
+                    openCareScene('sundowning');
                     setAiMessage('检测到黄昏时段情绪与行为波动，我会陪伴您并启动安抚干预。');
                     setCareConsoleFlash('已触发黄昏异常守护场景。');
                     break;
@@ -2085,6 +2122,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
             simulateCognitiveCaptureFromConsole,
             simulateMedicationFromConsole,
             simulateHomeLinkageFromConsole,
+            openCareScene,
         ],
     );
 
@@ -2105,6 +2143,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
     const triggerVoiceCommand = useCallback((userText: string, targetScenario: 'nav' | 'meds' | 'memory', aiResponse: string) => {
         // 1. Reset
         setActiveScenario('none');
+        setActiveCareScene('none');
         setStep(0);
         setIsRecording(false);
         speechService.stopRecognition();
@@ -2159,13 +2198,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
 
     return (
         <div className="flex h-full items-center justify-center gap-6 px-6 py-8 xl:flex-row flex-col">
-            <div className="relative w-[360px] h-[720px] bg-black rounded-[3rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] border-[8px] border-slate-800 overflow-hidden ring-1 ring-slate-900/5 select-none font-sans">
-
-                {/* Status Bar */}
-                <div className="absolute top-0 left-0 right-0 h-10 z-[60] flex items-center justify-between px-6 pt-2 text-white text-xs font-medium pointer-events-none mix-blend-difference">
-                    <span>{time}</span>
-                    <div className="flex items-center gap-1.5"><Signal size={12} /><Wifi size={12} /><Battery size={14} /></div>
-                </div>
+            <MobileShellFrame time={time}>
 
                 {/* Face Recognition Overlay */}
                 {showFaceRecognition && (
@@ -2245,208 +2278,73 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
                     />
                 )}
 
+                <CareSceneOverlayLayer
+                    activeCareScene={activeCareScene}
+                    medicationName={careSceneMedicationName}
+                    riskLevel={sundowningSnapshot.riskLevel}
+                    interventionText={activeSundowningPlan?.script || sundowningAlerts[0]?.message}
+                    onClose={closeCareScene}
+                    onNavigateHome={() => {
+                        closeCareScene();
+                        mapService.planWalkingRoute('当前位置', '家').then(route => {
+                            setRouteData(route);
+                            setNavDestination('家');
+                            setActiveScenario('nav');
+                        });
+                    }}
+                    onMedicationTaken={() => {
+                        medicationService.confirmTaken();
+                        closeCareScene();
+                        setAiMessage('好的，已记录您服药了。记得多喝水~');
+                        setIsTalking(true);
+                        setTimeout(() => setIsTalking(false), 1600);
+                    }}
+                    onMedicationRemindLater={() => {
+                        medicationService.snoozeReminder(10);
+                        closeCareScene();
+                        setAiMessage('好的，10分钟后我会再提醒您。');
+                    }}
+                    onContactFamily={() => {
+                        closeCareScene();
+                        setAiMessage('正在联系您的家人...');
+                        setIsTalking(true);
+                        setTimeout(() => setIsTalking(false), 3000);
+                    }}
+                />
+
                 {/* --- HOME SCREEN (2D Avatar) --- */}
-                <div className={`w-full h-full flex flex-col relative transition-all duration-700 overflow-hidden bg-gradient-to-b from-indigo-50 to-white ${activeScenario !== 'none' ? 'opacity-0 pointer-events-none scale-95' : 'opacity-100 scale-100'}`}>
-
-                    {/* Header */}
-                    <div className="w-full px-8 pt-14 pb-2 flex justify-between items-end relative z-10 animate-fade-in-up shrink-0">
-                        <div className="flex flex-col">
-                            <span className="text-5xl font-black text-slate-800 tracking-tighter leading-none">{time}</span>
-                            <span className="text-sm font-bold text-slate-500 mt-2 pl-1 tracking-widest uppercase">{dateStr}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-3xl font-black text-slate-800">24°</span>
-                            <CloudSun size={32} className="text-amber-500" />
-                        </div>
-                    </div>
-
-                    {/* 单个动态 2D 数字人居中（仅此一处渲染，无静态重复） */}
-                    <div className="flex-1 flex items-center justify-center relative min-h-0 -mt-8 overflow-hidden">
-                        <div className="relative flex items-center justify-center group cursor-pointer" onClick={() => setShowAvatarCreator(true)}>
-                            <div className="transform scale-90 shrink-0">
-                                <VideoAvatar
-                                    isTalking={isTalking}
-                                    isListening={isListening}
-                                />
-                            </div>
-                            {/* Platform Shadow */}
-                            <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-40 h-8 bg-black/10 rounded-[100%] blur-md transform scale-x-150 z-[-1] animate-shadow-breath" />
-                        </div>
-
-                        {/* 警告状态指示 */}
-                        {status === SystemStatus.WARNING && (
-                            <div className="absolute top-4 right-6 w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center animate-pulse z-50">
-                                <AlertCircle size={14} className="text-white" />
-                            </div>
-                        )}
-
-                        {/* 记忆唤醒提示 */}
-                        {memoryEvent && (
-                            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-indigo-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg animate-bounce whitespace-nowrap z-50">
-                                📍 {memoryEvent.anchor.name}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* 黄昏守护卡片：仅在中/高风险或干预进行时显示 */}
-                    {activeScenario === 'none' && (sundowningSnapshot.riskLevel !== 'low' || activeSundowningPlan?.status === 'running' || showBreathingGuide) && (
-                        <div className="shrink-0 px-4 pb-2 relative z-10">
-                            <div className={`rounded-2xl border p-3 backdrop-blur-sm ${
-                                sundowningSnapshot.riskLevel === 'high'
-                                    ? 'bg-rose-50/90 border-rose-200'
-                                    : sundowningSnapshot.riskLevel === 'medium'
-                                        ? 'bg-amber-50/90 border-amber-200'
-                                        : 'bg-white/70 border-slate-200'
-                            }`}>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[12px] font-bold text-slate-700">黄昏守护</span>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                                            sundowningSnapshot.riskLevel === 'high'
-                                                ? 'bg-rose-100 text-rose-700'
-                                                : sundowningSnapshot.riskLevel === 'medium'
-                                                    ? 'bg-amber-100 text-amber-700'
-                                                    : 'bg-emerald-100 text-emerald-700'
-                                        }`}>
-                                            {sundowningSnapshot.riskLevel === 'high' ? '高风险' : sundowningSnapshot.riskLevel === 'medium' ? '中风险' : '低风险'}
-                                        </span>
-                                    </div>
-                                    <span className="text-[10px] text-slate-500">风险指数 {sundowningSnapshot.riskScore}</span>
-                                </div>
-
-                                <div className="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                    <div
-                                        className={`h-full transition-all duration-500 ease-out ${
-                                            sundowningSnapshot.riskLevel === 'high'
-                                                ? 'bg-rose-500'
-                                                : sundowningSnapshot.riskLevel === 'medium'
-                                                    ? 'bg-amber-500'
-                                                    : 'bg-emerald-500'
-                                        }`}
-                                        style={{ width: `${Math.max(6, sundowningSnapshot.riskScore)}%` }}
-                                    />
-                                </div>
-
-                                <p className="mt-2 text-[10px] text-slate-600">
-                                    {sundowningSnapshot.keyFactors.slice(0, 2).join('；')}
-                                </p>
-
-                                {activeSundowningPlan?.status === 'running' && (
-                                    <p className="mt-1 text-[10px] font-medium text-indigo-600">
-                                        正在干预：{activeSundowningPlan.title}
-                                    </p>
-                                )}
-
-                                {showBreathingGuide && (
-                                    <div className="mt-2 rounded-xl bg-sky-50 border border-sky-100 px-2.5 py-2">
-                                        <p className="text-[11px] font-semibold text-sky-700">
-                                            呼吸训练：{breathingGuideSteps[breathingGuideIndex]}
-                                        </p>
-                                    </div>
-                                )}
-
-                                {sundowningAlerts[0] && (
-                                    <p className="mt-1 text-[10px] text-slate-500">
-                                        推送：{sundowningAlerts[0].title}
-                                    </p>
-                                )}
-
-                                <div className="mt-2 grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => triggerSundowningIntervention('family_voice_story')}
-                                        className="h-8 rounded-xl bg-indigo-500 text-white text-[11px] font-semibold"
-                                    >
-                                        家属安抚
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => triggerSundowningIntervention('breathing_exercise')}
-                                        className="h-8 rounded-xl bg-sky-500 text-white text-[11px] font-semibold"
-                                    >
-                                        呼吸放松
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* AI 消息展示区域（紧凑） */}
-                    {(voiceInputDisplay || aiMessage) && (
-                        <div className="shrink-0 px-4 pb-1 relative z-10 min-h-0">
-                            <div className="bg-white/60 backdrop-blur-sm py-2 px-3 rounded-xl text-center">
-                                {voiceInputDisplay ? (
-                                    <p className="text-slate-800 text-sm font-bold truncate">"{voiceInputDisplay}"</p>
-                                ) : (
-                                    <p className="text-slate-600 text-sm font-medium truncate">{aiMessage}</p>
-                                )}
-                                <div ref={messagesEndRef} />
-                            </div>
-                        </div>
-                    )}
-                    {/* 输入框：左侧键盘 | 中间语音/文字 | 右侧相册 — 固定在底部 */}
-                    <div className="shrink-0 px-3 pb-6 pt-2 relative z-10">
-                        <div
-                            className="bg-[#F7F7F7] rounded-[2rem] min-h-[68px] flex items-center justify-between px-4 py-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] select-none"
-                            style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
-                        >
-                            {/* 左侧：键盘输入（点击切换键盘/语音模式） */}
-                            <button
-                                type="button"
-                                onClick={() => setUseKeyboardInput(prev => !prev)}
-                                className={`w-12 h-12 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${useKeyboardInput ? 'border-indigo-500 bg-indigo-50 text-indigo-600' : 'border-slate-400/60 text-slate-600 hover:bg-slate-100'}`}
-                                title={useKeyboardInput ? '切换为语音输入' : '使用键盘输入'}
-                            >
-                                <Keyboard size={24} strokeWidth={2} />
-                            </button>
-                            {/* 中央：键盘模式=文字输入框，语音模式=长按说话 */}
-                            {useKeyboardInput ? (
-                                <div className="flex-1 flex items-center gap-2 min-w-0 mx-3">
-                                    <input
-                                        type="text"
-                                        value={textInputValue}
-                                        onChange={(e) => setTextInputValue(e.target.value)}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') handleTextSubmit(); }}
-                                        placeholder="输入文字发送..."
-                                        className="flex-1 min-w-0 h-12 px-4 rounded-2xl bg-white border border-slate-200 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                                        autoFocus
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleTextSubmit}
-                                        disabled={!textInputValue.trim()}
-                                        className="w-12 h-12 rounded-full bg-indigo-500 flex items-center justify-center text-white flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                                    >
-                                        <Send size={20} strokeWidth={2} />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div
-                                    className="flex-1 flex items-center justify-center min-h-[48px] min-w-0 mx-3 cursor-pointer active:opacity-80 transition-opacity"
-                                    onPointerDown={handleHoldStart}
-                                    onPointerUp={handleHoldEnd}
-                                    onPointerLeave={handleHoldEnd}
-                                    onPointerCancel={handleHoldEnd}
-                                    onContextMenu={(e) => e.preventDefault()}
-                                >
-                                    <span className="text-slate-600 font-medium text-lg">
-                                        {isListening ? '正在聆听...' : isThinking ? '思考中...' : '长按说话'}
-                                    </span>
-                                </div>
-                            )}
-                            {/* 右侧：相册（时光回忆录） */}
-                            <button
-                                type="button"
-                                onClick={openAlbum}
-                                className="w-12 h-12 rounded-full border-2 border-slate-400/60 flex items-center justify-center flex-shrink-0 text-slate-600 hover:bg-slate-100 transition-colors"
-                                title="打开相册"
-                            >
-                                <Images size={26} strokeWidth={2} />
-                            </button>
-                        </div>
-                    </div>
-
-                </div> {/* Close HomeScreen */}
+                <CompanionHomeLayer
+                    hiddenByScenario={activeScenario !== 'none' || activeCareScene !== 'none'}
+                    time={time}
+                    dateStr={dateStr}
+                    status={status}
+                    isTalking={isTalking}
+                    isListening={isListening}
+                    isThinking={isThinking}
+                    aiMessage={aiMessage}
+                    voiceInputDisplay={voiceInputDisplay}
+                    memoryAnchorName={memoryEvent?.anchor.name || null}
+                    messagesEndRef={messagesEndRef}
+                    onOpenAvatarCreator={() => setShowAvatarCreator(true)}
+                    onOpenAlbum={openAlbum}
+                    useKeyboardInput={useKeyboardInput}
+                    onToggleInputMode={() => setUseKeyboardInput(prev => !prev)}
+                    textInputValue={textInputValue}
+                    onChangeTextInput={setTextInputValue}
+                    onTextSubmit={handleTextSubmit}
+                    onTextInputKeyDown={(key) => { if (key === 'Enter') handleTextSubmit(); }}
+                    onHoldStart={(e) => handleHoldStart(e)}
+                    onHoldEnd={(e) => handleHoldEnd(e)}
+                    sundowningSnapshot={sundowningSnapshot}
+                    sundowningAlerts={sundowningAlerts}
+                    activeSundowningPlan={activeSundowningPlan}
+                    showBreathingGuide={showBreathingGuide}
+                    breathingGuideSteps={breathingGuideSteps}
+                    breathingGuideIndex={breathingGuideIndex}
+                    onFamilySoothing={() => triggerSundowningIntervention('family_voice_story')}
+                    onBreathingExercise={() => triggerSundowningIntervention('breathing_exercise')}
+                    customAvatarUrl={customAvatarUrl}
+                />
 
                 {/* AIGC Avatar Creator Overlay */}
                 {showAvatarCreator && (
@@ -2472,39 +2370,13 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
                     }}
                 />
 
-                {/* 游荡警报 */}
-                <WanderingAlert
-                    onNavigateHome={() => {
-                        // 导航回家
-                        mapService.planWalkingRoute('当前位置', '家').then(route => {
-                            setRouteData(route);
-                            setNavDestination('家');
-                            setActiveScenario('nav');
-                        });
-                    }}
-                    onCallFamily={() => {
-                        setAiMessage('正在联系您的家人...');
-                        setIsTalking(true);
-                        setTimeout(() => setIsTalking(false), 3000);
-                    }}
-                />
-
-                {/* 服药提醒 */}
-                <MedicationReminder
-                    onTaken={() => {
-                        setAiMessage('好的，已记录您服药了。记得多喝水~');
-                        setIsTalking(true);
-                        setTimeout(() => setIsTalking(false), 2000);
-                    }}
-                />
-
                 {/* 认知报告 */}
                 <CognitiveReport
                     isOpen={showCognitiveReport}
                     onClose={() => setShowCognitiveReport(false)}
                 />
 
-            </div>
+            </MobileShellFrame>
 
             <div className="w-full max-w-[380px] shrink-0">
                 <div className="rounded-[2rem] border border-slate-200 bg-white/95 p-4 shadow-[0_20px_45px_-20px_rgba(15,23,42,0.35)] backdrop-blur-sm">
