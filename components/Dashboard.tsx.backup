@@ -24,12 +24,9 @@ import { openclawSyncService } from '../services/openclawSyncService';
 import { openclawActionService } from '../services/openclawActionService';
 import { publishLocalUiCommand } from '../services/localUiCommandBus';
 import { getOpenClawBridgeBaseUrl } from '../utils/runtimeConfig';
-import { ShieldCheck, MapPin, Heart, Pill, AlertTriangle, Phone, Activity, Clock, User, Calendar, LayoutGrid, FileText, Settings, ChevronRight, ChevronLeft, Eye, Brain, Layers, Play, Pause, SkipBack, SkipForward, History, AlertCircle, Signal, Wifi, Battery, Moon, Footprints, Sun, Cloud, ArrowLeft, Mic, Upload, Sparkles, CheckCircle, Volume2, ToggleRight, Loader2, ScanFace, Box, Wand2, Plus, X, Users, Camera, TrendingUp, BookOpen, MessageCircle, MessageSquare, Link2, ArrowUpRight } from 'lucide-react';
+import { ShieldCheck, MapPin, Heart, Pill, AlertTriangle, Phone, Activity, Clock, User, Calendar, LayoutGrid, FileText, Settings, ChevronRight, Eye, Brain, Layers, Play, Pause, SkipBack, SkipForward, History, AlertCircle, Signal, Wifi, Battery, Moon, Footprints, Sun, Cloud, ArrowLeft, Mic, Upload, Sparkles, CheckCircle, Volume2, ToggleRight, Loader2, ScanFace, Box, Wand2, Plus, X, Users, Camera, TrendingUp, BookOpen, MessageCircle, MessageSquare, Link2, ArrowUpRight } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, AreaChart, Area, BarChart, Bar, CartesianGrid } from 'recharts';
 import ReactMarkdown from 'react-markdown';
-import OverviewTab from './dashboard/tabs/OverviewTab';
-import RiskDetailModal from './dashboard/modals/RiskDetailModal';
-import type { RiskType } from './dashboard/types';
 
 interface DashboardProps {
     status: SystemStatus;
@@ -136,8 +133,6 @@ interface LocationTabContentProps {
     /** 当前位置相关照片：多模态环境感知（不显示地图），与当前地址/POI 关联 */
     locationPhotoItems: { url: string; caption?: string }[];
     /** 是否使用 JS API 交互地图（可缩放、平移）；null=尚未尝试，true=使用 JS 地图，false=使用静态图 */
-    onBack?: () => void;
-    /** 是否使用 JS API 交互地图（可缩放、平移）；null=尚未尝试，true=使用 JS 地图，false=使用静态图 */
     useJsMap: boolean | null;
     /** 上方静态地图图片 URL（高德 Web 服务，仅 useJsMap=false 时显示） */
     topMapStaticUrl: string;
@@ -177,7 +172,6 @@ const LocationTabContent: React.FC<LocationTabContentProps> = ({
     geofenceRadiusDeg,
     environmentAnalysis,
     environmentAnalysisLoading = false,
-    onBack,
 }) => {
     const STATIC_MAP_ZOOM = 16;
     const STATIC_MAP_W = 800;
@@ -199,19 +193,6 @@ const LocationTabContent: React.FC<LocationTabContentProps> = ({
 
     return (
         <div className="flex flex-col h-full bg-slate-50">
-            {/* 返回按钮 */}
-            {onBack && (
-                <div className="px-4 pt-4 pb-2">
-                    <button
-                        onClick={onBack}
-                        className="flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors"
-                    >
-                        <ChevronLeft size={20} />
-                        <span className="text-sm font-medium">返回总览</span>
-                    </button>
-                </div>
-            )}
-
             <div className="h-[55%] w-full relative group">
                 <div id="guardian-map-container" ref={mapContainerRef} className="w-full h-full min-h-[280px] z-0 bg-slate-200 overflow-hidden relative">
                     {useJsMap === false && topMapStaticUrl ? (
@@ -397,43 +378,41 @@ const MIN_VOICE_SAMPLE_SECONDS = 10;
 const buildRealtimeSeries = (baseBpm: number, basePressure: number, baseSpo2: number) => {
     const initial: { time: string; bpm: number; pressure: number; spo2: number }[] = [];
     const now = new Date();
-    // 15秒间隔，显示最近20个点（5分钟历史）
-    for (let i = 20; i >= 0; i--) {
-        const t = new Date(now.getTime() - i * 15000);
+    for (let i = 60; i >= 0; i--) {
+        const t = new Date(now.getTime() - i * 1000);
         initial.push({
             time: t.toLocaleTimeString('en-US', {
                 hour12: false,
                 hour: '2-digit',
                 minute: '2-digit',
+                second: '2-digit',
             }),
-            bpm: Math.round(baseBpm + Math.sin((now.getTime() - i * 15000) / 5000) * 6 + (Math.random() * 4 - 2)),
-            pressure: Math.round(basePressure + Math.sin((now.getTime() - i * 15000) / 8000) * 8 + (Math.random() * 4 - 2)),
-            spo2: Math.round(baseSpo2 + Math.sin((now.getTime() - i * 15000) / 7000) * 1.2 + (Math.random() * 1.5 - 0.75)),
+            bpm: Math.round(baseBpm + Math.sin((now.getTime() - i * 1000) / 5000) * 6 + (Math.random() * 4 - 2)),
+            pressure: Math.round(basePressure + Math.sin((now.getTime() - i * 1000) / 8000) * 8 + (Math.random() * 4 - 2)),
+            spo2: Math.round(baseSpo2 + Math.sin((now.getTime() - i * 1000) / 7000) * 1.2 + (Math.random() * 1.5 - 0.75)),
         });
     }
     return initial;
 };
 
 function formatRealtimeTickLabel(value: string): string {
-    // 直接返回 HH:MM 格式
+    const parts = value.split(':');
+    if (parts.length >= 3) return `${parts[1]}:${parts[2]}`;
     return value;
 }
 
 function getRealtimeAxisTicks(data: { time: string }[]): string[] {
     if (data.length <= 1) return data.map((item) => item.time);
-    // 每4个点显示一次刻度（4 * 15秒 = 60秒 = 1分钟间隔）
-    const step = 4;
-    const ticks: string[] = [];
-    for (let i = 0; i < data.length; i += step) {
-        if (data[i]?.time) {
-            ticks.push(data[i].time);
-        }
+    const desiredSegments = 4;
+    const step = Math.max(1, Math.round((data.length - 1) / desiredSegments));
+    const tickIndexes = new Set<number>([0, data.length - 1]);
+    for (let index = step; index < data.length - 1; index += step) {
+        tickIndexes.add(index);
     }
-    // 确保最后一个点也显示
-    if (data[data.length - 1]?.time && !ticks.includes(data[data.length - 1].time)) {
-        ticks.push(data[data.length - 1].time);
-    }
-    return ticks;
+    return Array.from(tickIndexes)
+        .sort((a, b) => a - b)
+        .map((index) => data[index]?.time)
+        .filter((value): value is string => Boolean(value));
 }
 
 const RealTimeHealthCharts: React.FC<{ metrics: HealthMetrics }> = ({ metrics }) => {
@@ -475,7 +454,6 @@ const RealTimeHealthCharts: React.FC<{ metrics: HealthMetrics }> = ({ metrics })
     }, [metrics.heartRate, metrics.bloodPressure.systolic, metrics.bloodOxygen]);
 
     useEffect(() => {
-        // 每15秒更新一次数据点
         const interval = setInterval(() => {
             setData((prevData) => {
                 const now = new Date();
@@ -484,6 +462,7 @@ const RealTimeHealthCharts: React.FC<{ metrics: HealthMetrics }> = ({ metrics })
                         hour12: false,
                         hour: '2-digit',
                         minute: '2-digit',
+                        second: '2-digit',
                     }),
                     bpm: Math.round(
                         metrics.heartRate +
@@ -503,7 +482,7 @@ const RealTimeHealthCharts: React.FC<{ metrics: HealthMetrics }> = ({ metrics })
                 };
                 return [...prevData.slice(1), newPoint];
             });
-        }, 15000);
+        }, 1000);
         return () => clearInterval(interval);
     }, [metrics.heartRate, metrics.bloodPressure.systolic, metrics.bloodOxygen]);
 
@@ -630,7 +609,13 @@ const RealTimeHealthCharts: React.FC<{ metrics: HealthMetrics }> = ({ metrics })
                                     axisLine={false}
                                     tickLine={false}
                                     tick={{ fill: '#94a3b8', fontSize: 10 }}
-                                    domain={[0, 100]}
+                                    domain={
+                                        activeChart === 'heart'
+                                            ? [60, 110]
+                                            : activeChart === 'bp'
+                                                ? [90, 150]
+                                                : [90, 100]
+                                    }
                                     width={30}
                                 />
                                 <Tooltip
@@ -690,7 +675,6 @@ const RealTimeHealthCharts: React.FC<{ metrics: HealthMetrics }> = ({ metrics })
 
 interface DashboardSettingsViewProps {
     onClose: () => void;
-    onNavigateToFaces: () => void;
 }
 
 interface DashboardHealthTabProps {
@@ -707,10 +691,9 @@ interface DashboardHealthTabProps {
     setShowHealthReportModal: (value: boolean) => void;
     showCognitiveReportModal: boolean;
     setShowCognitiveReportModal: (value: boolean) => void;
-    onBack?: () => void;
 }
 
-const DashboardSettingsView: React.FC<DashboardSettingsViewProps> = ({ onClose, onNavigateToFaces }) => {
+const DashboardSettingsView: React.FC<DashboardSettingsViewProps> = ({ onClose }) => {
     const [cloneStep, setCloneStep] = useState<'idle' | 'recording' | 'processing' | 'done'>('idle');
     const [voiceProgress, setVoiceProgress] = useState(0);
     const [clonedVoiceName, setClonedVoiceName] = useState<string>('');
@@ -1222,27 +1205,6 @@ const DashboardSettingsView: React.FC<DashboardSettingsViewProps> = ({ onClose, 
 
                 <div className="space-y-4">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider pl-1">通用设置</h4>
-
-                    {/* 相册入口 */}
-                    <button
-                        onClick={() => {
-                            onClose();
-                            onNavigateToFaces();
-                        }}
-                        className="w-full bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-all"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
-                                <Users size={20} />
-                            </div>
-                            <div className="text-left">
-                                <p className="font-bold text-slate-800 text-sm">人脸相册</p>
-                                <p className="text-[11px] text-slate-500">查看和管理家人照片</p>
-                            </div>
-                        </div>
-                        <ChevronRight size={20} className="text-slate-400" />
-                    </button>
-
                     <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500">
@@ -1449,7 +1411,6 @@ const DashboardHealthTab: React.FC<DashboardHealthTabProps> = ({
     setShowHealthReportModal,
     showCognitiveReportModal,
     setShowCognitiveReportModal,
-    onBack,
 }) => {
     const totalSleepHours = mockSleepData.reduce((acc, d) => (d.name === '深睡' || d.name === '浅睡') ? acc + d.hours : acc, 0);
     const deepSleepHours = mockSleepData.find((d) => d.name === '深睡')?.hours ?? 0;
@@ -1563,17 +1524,6 @@ const DashboardHealthTab: React.FC<DashboardHealthTabProps> = ({
 
     return (
         <div className="flex flex-col gap-5 p-4 pb-24 animate-fade-in-up bg-slate-50/80">
-            {/* 返回按钮 */}
-            {onBack && (
-                <button
-                    onClick={onBack}
-                    className="flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors mb-2"
-                >
-                    <ChevronLeft size={20} />
-                    <span className="text-sm font-medium">返回总览</span>
-                </button>
-            )}
-
             {hasAttention ? (
                 <>
                     <div className="bg-amber-50 border border-amber-200 px-4 py-4 rounded-3xl shadow-sm">
@@ -2231,7 +2181,7 @@ const DashboardHealthTab: React.FC<DashboardHealthTabProps> = ({
     );
 };
 
-const DashboardFaceAlbumTab: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
+const DashboardFaceAlbumTab: React.FC = () => {
     const [faces, setFaces] = useState<FaceData[]>(() => faceService.getFaces());
     const [showAddModal, setShowAddModal] = useState(false);
     const [form, setForm] = useState({
@@ -2266,17 +2216,6 @@ const DashboardFaceAlbumTab: React.FC<{ onBack?: () => void }> = ({ onBack }) =>
 
     return (
         <div className="flex flex-col gap-5 p-5 pb-24 animate-fade-in-up">
-            {/* 返回按钮 */}
-            {onBack && (
-                <button
-                    onClick={onBack}
-                    className="flex items-center gap-2 text-slate-600 hover:text-slate-800 transition-colors mb-2"
-                >
-                    <ChevronLeft size={20} />
-                    <span className="text-sm font-medium">返回总览</span>
-                </button>
-            )}
-
             <div>
                 <h2 className="text-xl font-bold text-slate-800 mb-3">时光相册</h2>
                 <p className="text-xs text-slate-500 mb-3">老人端相册中的照片，用于回忆唤起</p>
@@ -2385,27 +2324,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
     // 完整报告弹窗显示状态
     const [showHealthReportModal, setShowHealthReportModal] = useState(false);
     const [showCognitiveReportModal, setShowCognitiveReportModal] = useState(false);
-
-    // 风险详情页状态
-    const [detailModalType, setDetailModalType] = useState<RiskType | null>(null);
-    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-
-    const handleOpenDetail = (type: RiskType) => {
-        // 点击卡片跳转到对应的Tab页面
-        if (type === 'wandering') {
-            setActiveTab('location');
-        } else if (type === 'medication') {
-            setActiveTab('health');
-        } else if (type === 'cognitive') {
-            setActiveTab('health');
-            setActiveAiTab('cognitive');
-        }
-    };
-
-    const handleCloseDetail = () => {
-        setIsDetailModalOpen(false);
-        setDetailModalType(null);
-    };
 
     const generateReport = async () => {
         setReportLoading(true);
@@ -3589,10 +3507,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                 <div className="flex-1 bg-[#F8FAFC] overflow-y-auto no-scrollbar relative pt-8">
 
                     {isSettingsOpen ? (
-                        <DashboardSettingsView
-                            onClose={() => setIsSettingsOpen(false)}
-                            onNavigateToFaces={() => setActiveTab('faces')}
-                        />
+                        <DashboardSettingsView onClose={() => setIsSettingsOpen(false)} />
                     ) : (
                         <>
                             {/* Scrollable Header */}
@@ -3611,13 +3526,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                                 </button>
                             </div>
 
-                            {activeTab === 'overview' && (
-                                <OverviewTab
-                                    status={avatarVisualStatus}
-                                    simulation={simulation}
-                                    onOpenDetail={handleOpenDetail}
-                                />
-                            )}
+                            {activeTab === 'overview' && renderOverviewTab()}
                             {activeTab === 'health' && (
                                 <DashboardHealthTab
                                     currentMetrics={currentMetrics}
@@ -3633,7 +3542,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                                     setShowHealthReportModal={setShowHealthReportModal}
                                     showCognitiveReportModal={showCognitiveReportModal}
                                     setShowCognitiveReportModal={setShowCognitiveReportModal}
-                                    onBack={() => setActiveTab('overview')}
                                 />
                             )}
                             {activeTab === 'location' && (
@@ -3662,14 +3570,39 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                                     geofenceRadiusDeg={SAFE_ZONE_RADIUS_DEG}
                                     environmentAnalysis={environmentAnalysis}
                                     environmentAnalysisLoading={environmentAnalysisLoading}
-                                    onBack={() => setActiveTab('overview')}
                                 />
                             )}
-                            {activeTab === 'faces' && <DashboardFaceAlbumTab onBack={() => setActiveTab('overview')} />}
+                            {activeTab === 'faces' && <DashboardFaceAlbumTab />}
 
                         </>
                     )}
                 </div>
+
+                {/* Bottom Navigation Bar - Hide when in Settings */}
+                {!isSettingsOpen && (
+                    <div className="absolute bottom-0 w-full h-20 bg-white/95 backdrop-blur-xl border-t border-slate-100 flex items-center justify-around pb-4 z-50 shadow-[0_-5px_30px_rgba(0,0,0,0.03)]">
+                        {[
+                            { id: 'overview', label: '总览', icon: LayoutGrid },
+                            { id: 'health', label: '健康', icon: Heart },
+                            { id: 'location', label: '定位', icon: MapPin },
+                            { id: 'faces', label: '相册', icon: Users },
+                        ].map((item) => {
+                            const isActive = activeTab === (item.id as DashboardTab);
+                            return (
+                                <button
+                                    key={item.id}
+                                    onClick={() => setActiveTab(item.id as DashboardTab)}
+                                    className={`flex flex-col items-center gap-1.5 w-12 transition-all duration-300 group ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}
+                                >
+                                    <div className={`p-2 rounded-2xl transition-all duration-300 ${isActive ? 'bg-indigo-50 -translate-y-1 shadow-sm' : 'group-hover:bg-slate-50'}`}>
+                                        <item.icon size={22} className={isActive ? 'fill-indigo-600/20' : ''} strokeWidth={isActive ? 2.5 : 2} />
+                                    </div>
+                                    <span className={`text-[10px] font-bold transition-all duration-300 ${isActive ? 'opacity-100' : 'opacity-0 h-0'}`}>{item.label}</span>
+                                </button>
+                            )
+                        })}
+                    </div>
+                )}
 
                 {/* Overlay for Critical Alerts */}
                 {status === SystemStatus.CRITICAL && !isSettingsOpen && (
@@ -3679,22 +3612,6 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                     </div>
                 )}
             </div>
-
-            {/* 风险详情页 Modal */}
-            <RiskDetailModal
-                type={detailModalType}
-                isOpen={isDetailModalOpen}
-                onClose={handleCloseDetail}
-                wanderingState={wanderingService.getState()}
-                locationState={locationAutomationService.getState()}
-                medicationReminder={medicationService.getActiveReminder()}
-                medicationLogs={medicationService.getTodayLogs()}
-                sundowningSnapshot={sundowningSnapshot}
-                sundowningIntervention={sundowningPlan}
-                logs={logs}
-                elderMessage={null}
-                elderAction={null}
-            />
 
             {/* 统一模拟控制面板（手机屏外：定位轨迹 + 健康数据） */}
             <div className="w-[320px] max-h-[720px] overflow-y-auto rounded-2xl bg-slate-50 border border-slate-200 shadow-lg p-4 shrink-0 space-y-6">
