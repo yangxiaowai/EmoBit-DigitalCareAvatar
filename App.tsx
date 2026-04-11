@@ -1,5 +1,4 @@
 import React, { useEffect, useReducer, useRef } from 'react';
-import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import ElderlyApp from './components/ElderlyApp';
 import { SystemStatus } from './types';
@@ -63,15 +62,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans text-slate-900">
-      <Sidebar
-        currentSimulation={state.simulation}
-        onScenarioRequest={(simulation) => demoAdapterRef.current.requestSimulation(simulation)}
-        onReset={() => demoAdapterRef.current.resetSystem()}
-        logs={state.logs}
-      />
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full relative overflow-hidden transition-all duration-300">
+      <div className="flex-1 flex flex-col h-full relative overflow-hidden transition-all duration-300 min-w-0">
         
         {/* Top Navigation Bar */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shadow-sm z-30 shrink-0">
@@ -132,7 +123,12 @@ const App: React.FC = () => {
               <Dashboard status={state.systemStatus} simulation={state.simulation} logs={state.logs} />
             ) : (
               <div className="h-full w-full overflow-y-auto p-6">
-                 <ElderlyApp status={state.systemStatus} simulation={state.simulation} externalMessage={state.elderMessage} externalAction={state.elderAction} />
+                 <ElderlyApp
+                   status={state.systemStatus}
+                   simulation={state.simulation}
+                   externalMessage={state.elderMessage}
+                   externalAction={state.elderAction}
+                 />
               </div>
             )}
           </div>

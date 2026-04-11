@@ -2,8 +2,6 @@ import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { SimulationType } from './types';
-
 const mockSundowningService = (opts?: { riskLevel?: 'low' | 'medium' | 'high' }) => {
   const riskLevel = opts?.riskLevel ?? 'low';
   vi.doMock('./services/sundowningService', () => {
@@ -34,17 +32,6 @@ vi.mock('./components/ElderlyApp', () => {
         <div>__ELDERLY_APP_VIEW__</div>
         <div>__ELDERLY_ACTION__:{externalAction?.action || ''}</div>
         <div>__ELDERLY_MESSAGE__:{externalMessage?.text || ''}</div>
-      </div>
-    ),
-  };
-});
-
-vi.mock('./components/Sidebar', () => {
-  return {
-    default: ({ onScenarioRequest, onReset }: { onScenarioRequest: (t: SimulationType) => void; onReset: () => void }) => (
-      <div>
-        <button onClick={() => onScenarioRequest(SimulationType.FALL)}>__SIM_FALL__</button>
-        <button onClick={onReset}>__SIM_RESET__</button>
       </div>
     ),
   };

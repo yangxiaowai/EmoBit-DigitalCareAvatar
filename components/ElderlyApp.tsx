@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { SimulationType, SystemStatus, MemoryPhoto } from '../types';
 import { ALBUM_MEMORIES } from '../config/albumMemories';
 import { FACE_RECOGNITION_CONFIG } from '../config/faceRecognition';
-import { Mic, Battery, Wifi, Signal, Info, ChevronLeft, ChevronRight, Image as ImageIcon, Images, Volume2, X, CloudSun, Loader2, Navigation, ScanLine, Pill, CheckCircle, ArrowUp, ArrowLeft, ArrowRight, MapPin, Camera, User, ScanFace, Box, AlertCircle, MicOff, Sparkles, Settings, Keyboard, Send, Clock } from 'lucide-react';
+import { Battery, Wifi, Signal, Info, ChevronLeft, ChevronRight, Image as ImageIcon, Images, Volume2, X, CloudSun, Loader2, Navigation, ScanLine, Pill, CheckCircle, ArrowUp, ArrowLeft, ArrowRight, MapPin, Camera, User, ScanFace, Box, AlertCircle, MicOff, Sparkles, Settings, Keyboard, Send, Clock } from 'lucide-react';
 import { speechService, SpeechRecognitionResult } from '../services/speechService';
 import { mapService, RouteResult, RouteStep } from '../services/mapService';
 import { memoryService, LocationEvent } from '../services/memoryService';
@@ -618,6 +618,15 @@ const FAMILY_CONSOLE_CAPTURE_SCENARIOS = {
             '老人端主消息区域更新为数字人日常对话回复',
             '控制台出现「已模拟日常聊天场景」',
             '可截图对话文案 + 控制台结果',
+        ],
+    },
+    S9_medication_cv: {
+        title: 'S9 药物识别',
+        presetInput: '预设输入：语音「这药怎么吃？」触发 CV 药物识别与药盒引导流程。',
+        expectedUi: [
+            '老人端出现语音输入提示后进入药物识别（meds）场景',
+            '控制台出现「已触发 CV 药物识别演示流程」',
+            '可截图药盒识别界面 + 控制台结果',
         ],
     },
 } as const;
@@ -2051,6 +2060,29 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
         }
     }, [openAlbum, openCareScene]);
 
+    const triggerVoiceCommand = useCallback((userText: string, targetScenario: 'nav' | 'meds' | 'memory', aiResponse: string) => {
+        setActiveScenario('none');
+        setActiveCareScene('none');
+        setStep(0);
+        setIsRecording(false);
+        speechService.stopRecognition();
+
+        setVoiceInputDisplay(userText);
+        setIsListening(true);
+
+        setTimeout(() => {
+            setIsListening(false);
+            setVoiceInputDisplay(null);
+            setAiMessage(aiResponse);
+            setIsTalking(true);
+
+            setTimeout(() => {
+                setIsTalking(false);
+                setActiveScenario(targetScenario);
+            }, 800);
+        }, 600);
+    }, []);
+
     const setFamilyScenarioGuide = useCallback(
         (scenarioKey: keyof typeof FAMILY_CONSOLE_CAPTURE_SCENARIOS) => {
             const scenario = FAMILY_CONSOLE_CAPTURE_SCENARIOS[scenarioKey];
@@ -2112,6 +2144,10 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
                         setIsTalking(false);
                     }).catch(() => setIsTalking(false));
                     break;
+                case 'S9_medication_cv':
+                    triggerVoiceCommand('这药怎么吃？', 'meds', '我来帮您看看。请把药盒拿出来。');
+                    setCareConsoleFlash('已触发 CV 药物识别演示流程。');
+                    break;
                 default:
                     break;
             }
@@ -2123,6 +2159,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
             simulateMedicationFromConsole,
             simulateHomeLinkageFromConsole,
             openCareScene,
+            triggerVoiceCommand,
         ],
     );
 
@@ -2138,34 +2175,6 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
 
         executeFamilyControlAction(externalAction.action, externalAction.payload || {});
     }, [externalAction, executeFamilyControlAction]);
-
-    // Helper to trigger voice command flow (used by both real recognition and simulation)
-    const triggerVoiceCommand = useCallback((userText: string, targetScenario: 'nav' | 'meds' | 'memory', aiResponse: string) => {
-        // 1. Reset
-        setActiveScenario('none');
-        setActiveCareScene('none');
-        setStep(0);
-        setIsRecording(false);
-        speechService.stopRecognition();
-
-        // 2. Display User Voice Input
-        setVoiceInputDisplay(userText);
-        setIsListening(true);
-
-        // 3. AI Processes (Reduced delay)
-        setTimeout(() => {
-            setIsListening(false);
-            setVoiceInputDisplay(null);
-            setAiMessage(aiResponse);
-            setIsTalking(true);
-
-            // 4. AI Finishes talking and Switches UI (Reduced delay)
-            setTimeout(() => {
-                setIsTalking(false);
-                setActiveScenario(targetScenario);
-            }, 800); // Reduced from 2000
-        }, 600); // Reduced from 1500
-    }, []);
 
     // 录音中时：在文档上监听 pointerup/pointercancel，松开任意位置都会停止（防止滑出按钮未触发 onPointerUp）
     useEffect(() => {
@@ -2451,6 +2460,15 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
                                     className="rounded-xl bg-cyan-600 px-2.5 py-2 text-left text-[11px] font-bold text-white shadow-sm active:scale-[0.98] transition-transform"
                                 >
                                     S8 日常聊天
+                                </button>
+                            </div>
+                            <div className="mt-2 grid grid-cols-1 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => void runFamilyCaptureScenario('S9_medication_cv')}
+                                    className="rounded-xl bg-rose-600 px-2.5 py-2 text-left text-[11px] font-bold text-white shadow-sm active:scale-[0.98] transition-transform"
+                                >
+                                    S9 药物识别
                                 </button>
                             </div>
                             {careConsoleScenarioTitle && (
