@@ -29,7 +29,7 @@ class MainActivity : AppCompatActivity() {
             val bridgePort = app.bridgeServer.port
             val storage = app.storage.describe()
             textView.text = buildString {
-                appendLine("EmoBit Android Backend is running.")
+                appendLine("忆护同行 Android Backend is running.")
                 appendLine("Data Backend: http://127.0.0.1:$dataPort")
                 appendLine("Bridge: http://127.0.0.1:$bridgePort")
                 appendLine()
@@ -43,4 +43,3 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-

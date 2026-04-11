@@ -7,19 +7,19 @@ const dryRun = process.argv.includes('--dry-run');
 
 const jobs = [
   {
-    name: 'EmoBit Medication Sweep',
+    name: '忆护同行 Medication Sweep',
     cron: '*/5 * * * *',
-    message: 'Run the EmoBit medication sweep for the current elder. Use emobit_get_medication_context, remind the elder first, notify guardians when needed, and place a guardian call only if the escalation policy requires it.',
+    message: 'Run the 忆护同行 medication sweep for the current elder. Use emobit_get_medication_context, remind the elder first, notify guardians when needed, and place a guardian call only if the escalation policy requires it.',
   },
   {
-    name: 'EmoBit Daily Guardian Report',
+    name: '忆护同行 Daily Guardian Report',
     cron: '30 20 * * *',
-    message: 'Generate and send the EmoBit daily caregiver report for the current elder. Use emobit_get_daily_report_context and send exactly one concise guardian update.',
+    message: 'Generate and send the 忆护同行 daily caregiver report for the current elder. Use emobit_get_daily_report_context and send exactly one concise guardian update.',
   },
   {
-    name: 'EmoBit Sundowning Sweep',
+    name: '忆护同行 Sundowning Sweep',
     cron: '*/10 15-20 * * *',
-    message: 'Run the EmoBit sundowning proactive support sweep. Use emobit_get_sundowning_context, reassure the elder, notify guardians when the risk is high, and place a guardian call only when escalation policy requires it.',
+    message: 'Run the 忆护同行 sundowning proactive support sweep. Use emobit_get_sundowning_context, reassure the elder, notify guardians when the risk is high, and place a guardian call only when escalation policy requires it.',
   },
 ];
 

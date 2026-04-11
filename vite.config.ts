@@ -6,7 +6,9 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       server: {
-        port: 3000,
+        // Avoid 3000: Cursor often binds localhost:3000 for preview/tunnel (Express),
+        // which returns {"error":"Not Found"} and never reaches Vite.
+        port: 5173,
         host: '0.0.0.0',
       },
       plugins: [react()],

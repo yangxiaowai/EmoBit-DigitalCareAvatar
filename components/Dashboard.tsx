@@ -24,7 +24,7 @@ import { openclawSyncService } from '../services/openclawSyncService';
 import { openclawActionService } from '../services/openclawActionService';
 import { publishLocalUiCommand } from '../services/localUiCommandBus';
 import { getOpenClawBridgeBaseUrl } from '../utils/runtimeConfig';
-import { ShieldCheck, MapPin, Heart, Pill, AlertTriangle, Phone, Activity, Clock, User, Calendar, LayoutGrid, FileText, Settings, ChevronRight, ChevronLeft, Eye, Brain, Layers, Play, Pause, SkipBack, SkipForward, History, AlertCircle, Signal, Wifi, Battery, Moon, Footprints, Sun, Cloud, ArrowLeft, Mic, Upload, Sparkles, CheckCircle, Volume2, ToggleRight, Loader2, ScanFace, Box, Wand2, Plus, X, Users, Camera, TrendingUp, BookOpen, MessageCircle, MessageSquare, Link2, ArrowUpRight } from 'lucide-react';
+import { ShieldCheck, MapPin, Heart, Pill, AlertTriangle, Phone, Activity, Clock, User, Calendar, LayoutGrid, FileText, Settings, ChevronRight, ChevronLeft, Eye, Brain, Layers, Play, Pause, SkipBack, SkipForward, History, AlertCircle, Signal, Wifi, Battery, Moon, Footprints, Sun, Cloud, ArrowLeft, Mic, Upload, Sparkles, CheckCircle, Volume2, ToggleRight, Loader2, ScanFace, Box, Wand2, Plus, X, Users, Camera, TrendingUp, BookOpen, MessageCircle, MessageSquare, Link2, ArrowUpRight, Images } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, AreaChart, Area, BarChart, Bar, CartesianGrid } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 import OverviewTab from './dashboard/tabs/OverviewTab';
@@ -3601,14 +3601,30 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                                     <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-indigo-200 shadow-md">
                                         <Activity size={18} className="text-white" />
                                     </div>
-                                    <span className="text-lg font-bold text-slate-800 tracking-tight">MemoLink <span className="text-slate-400 font-normal">忆联</span></span>
+                                    <span className="text-lg font-bold text-slate-800 tracking-tight">忆护同行 <span className="text-slate-400 font-normal">MemoCare</span></span>
                                 </div>
-                                <button
-                                    onClick={() => setIsSettingsOpen(true)}
-                                    className="p-2 bg-white text-slate-400 hover:text-indigo-600 rounded-full shadow-sm border border-slate-50 transition-colors"
-                                >
-                                    <Settings size={18} />
-                                </button>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsSettingsOpen(false);
+                                            setActiveTab('faces');
+                                        }}
+                                        className="p-2 bg-white text-slate-400 hover:text-indigo-600 rounded-full shadow-sm border border-slate-50 transition-colors"
+                                        title="时光相册与人脸照片"
+                                        aria-label="查看与添加时光相册和人脸识别照片"
+                                    >
+                                        <Images size={18} />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsSettingsOpen(true)}
+                                        className="p-2 bg-white text-slate-400 hover:text-indigo-600 rounded-full shadow-sm border border-slate-50 transition-colors"
+                                        aria-label="设置"
+                                    >
+                                        <Settings size={18} />
+                                    </button>
+                                </div>
                             </div>
 
                             {activeTab === 'overview' && (

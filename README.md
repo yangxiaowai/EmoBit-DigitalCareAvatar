@@ -2,11 +2,11 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# 忆护同行——面向老年智能陪伴、健康监测与风险预警的 AI 智慧照护系统
 
-This contains everything you need to run your app locally.
+本项目是一套面向居家养老场景的 AI 智慧照护系统，覆盖老人端陪伴交互、家属端协同照护、健康监测、风险预警与状态回写闭环。
 
-View your app in AI Studio: https://ai.studio/apps/drive/1Qon_Pppxkm-7hSMxJvrvt2NrijU5E9A7
+当前仓库保留前端、Bridge、独立 Data Backend、Android 内置后端与相关测试脚本，可直接在本地运行和演示。
 
 ## Run Locally
 

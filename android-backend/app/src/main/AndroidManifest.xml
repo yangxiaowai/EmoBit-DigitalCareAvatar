@@ -6,7 +6,7 @@
     <application
         android:allowBackup="true"
         android:name=".EmoBitBackendApp"
-        android:label="EmoBit Backend"
+        android:label="忆护同行 Backend"
         android:supportsRtl="true">
 
         <activity
@@ -21,4 +21,3 @@
     </application>
 
 </manifest>
-

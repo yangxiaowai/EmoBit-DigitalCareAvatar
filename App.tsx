@@ -79,8 +79,10 @@ const App: React.FC = () => {
             <div className="bg-indigo-600 p-2 rounded-lg">
               <Activity className="text-white w-5 h-5" />
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-800 tracking-tight">MemoLink <span className="text-slate-400 font-light">忆联</span></h1>
+            <div className="max-w-[520px]">
+              <h1 className="text-sm font-bold leading-tight text-slate-800 tracking-tight md:text-base">
+                忆护同行——面向老年智能陪伴、健康监测与风险预警的 AI 智慧照护系统
+              </h1>
             </div>
           </div>
 

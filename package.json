@@ -1,5 +1,6 @@
 {
-  "name": "emobit---ai-elderly-care-system",
+  "name": "yihutongxing-ai-smart-elder-care-system",
+  "description": "忆护同行——面向老年智能陪伴、健康监测与风险预警的 AI 智慧照护系统",
   "private": true,
   "version": "0.0.0",
   "type": "module",

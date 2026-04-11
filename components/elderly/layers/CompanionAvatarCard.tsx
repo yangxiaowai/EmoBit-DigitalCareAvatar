@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mic, MicOff, Volume2, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useAvatarFallback } from '../../../hooks/useAvatarFallback';
 
 interface CompanionAvatarCardProps {
@@ -57,19 +57,6 @@ export const CompanionAvatarCard: React.FC<CompanionAvatarCardProps> = ({
                     />
                 )}
             </div>
-
-            <button
-                type="button"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenMainInteraction();
-                }}
-                className="absolute -bottom-5 z-30 h-11 px-4 rounded-full bg-white border border-slate-200 shadow text-slate-700 text-sm font-bold inline-flex items-center gap-2"
-            >
-                {isListening ? <MicOff size={16} /> : <Mic size={16} />}
-                <Volume2 size={16} />
-                继续陪聊
-            </button>
 
             <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-40 h-8 bg-black/10 rounded-[100%] blur-md transform scale-x-150 z-[-1] animate-shadow-breath" />
         </div>
