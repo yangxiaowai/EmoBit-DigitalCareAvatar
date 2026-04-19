@@ -10759,7 +10759,7 @@
   },
   "faceEvents": [],
   "version": 1,
-  "updatedAt": "2026-03-31T05:59:03.508Z",
+  "updatedAt": "2026-04-11T15:56:06.896Z",
   "faces": [],
   "timeAlbum": [],
   "outbound": [
@@ -12006,5 +12006,14 @@
         }
       ]
     }
-  ]
+  ],
+  "appShell": {
+    "activeView": "dashboard",
+    "simulation": "VOICE_MEDS_START",
+    "systemStatus": "NORMAL",
+    "elderMessage": null,
+    "elderAction": null,
+    "updatedAt": "2026-04-11T15:56:06.445Z",
+    "version": 1
+  }
 }
