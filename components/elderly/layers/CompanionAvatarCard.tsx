@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertCircle } from 'lucide-react';
 import { useAvatarFallback } from '../../../hooks/useAvatarFallback';
+import SafeImage from '../../common/SafeImage';
 
 interface CompanionAvatarCardProps {
     isTalking: boolean;
@@ -32,11 +33,12 @@ export const CompanionAvatarCard: React.FC<CompanionAvatarCardProps> = ({
                 {hasVideoError ? (
                     <div className="relative z-10 w-full h-full bg-slate-50 flex flex-col items-center justify-center text-center p-5">
                         <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow mb-4 bg-slate-200 flex items-center justify-center">
-                            {customAvatarUrl ? (
-                                <img src={customAvatarUrl} alt="数字人头像" className="w-full h-full object-cover" />
-                            ) : (
-                                <span className="text-4xl">👴</span>
-                            )}
+                            <SafeImage
+                                src={customAvatarUrl || '/avatar_grandchild.png'}
+                                alt="数字人头像"
+                                className="w-full h-full object-cover"
+                                fallback={<span className="text-4xl">👴</span>}
+                            />
                         </div>
                         <p className="text-slate-800 text-lg font-black">陪伴模式已切换</p>
                         <p className="text-slate-500 text-sm font-semibold mt-1">{companionStatusText}</p>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 interface SafeImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
   src?: string | null;
@@ -20,6 +20,11 @@ const SafeImage: React.FC<SafeImageProps> = ({ src, fallback = null, onError, ..
     }
     return encodeURI(src);
   }, [src]);
+
+  useEffect(() => {
+    // Reset error state when switching to a new image source.
+    setFailed(false);
+  }, [normalizedSrc]);
 
   if (!normalizedSrc || failed) {
     return <>{fallback}</>;

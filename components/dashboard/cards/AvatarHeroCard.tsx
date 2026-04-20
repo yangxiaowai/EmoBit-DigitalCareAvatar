@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { SystemStatus } from '../../../types';
 import { healthStateService, AvatarState } from '../../../services/healthStateService';
+import SafeImage from '../../common/SafeImage';
 
 interface AvatarHeroCardProps {
   status: SystemStatus;
@@ -9,6 +10,7 @@ interface AvatarHeroCardProps {
 
 const AvatarHeroCard: React.FC<AvatarHeroCardProps> = ({ status }) => {
   const [avatarState, setAvatarState] = useState<AvatarState>(healthStateService.getAvatarState());
+  const [videoLoadFailed, setVideoLoadFailed] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -64,14 +66,24 @@ const AvatarHeroCard: React.FC<AvatarHeroCardProps> = ({ status }) => {
           <div className={`absolute inset-2 rounded-full border overflow-hidden flex items-center justify-center ${
             avatarVisualStatus === SystemStatus.NORMAL ? 'bg-slate-50 border-white shadow-[inset_0_4px_20px_rgba(0,0,0,0.05)]' : 'bg-gradient-to-b from-white/20 to-white/5 border-white/30'
           }`}>
-            <video
-              src="/elder_avator.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full h-full object-cover"
-            />
+            {videoLoadFailed ? (
+              <SafeImage
+                src="/avatar_grandchild.png"
+                alt="数字人头像"
+                className="w-full h-full object-cover"
+                fallback={<div className="w-full h-full bg-white/20" />}
+              />
+            ) : (
+              <video
+                src="/elder_avator.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+                onError={() => setVideoLoadFailed(true)}
+              />
+            )}
           </div>
 
           {avatarVisualStatus !== SystemStatus.NORMAL && (
