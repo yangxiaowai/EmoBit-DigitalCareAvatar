@@ -8,6 +8,7 @@ export type CareSceneType = 'none' | 'wandering' | 'medication' | 'sundowning';
 interface CareSceneOverlayLayerProps {
     activeCareScene: CareSceneType;
     medicationName?: string;
+    medicationImageUrl?: string;
     riskLevel: 'low' | 'medium' | 'high';
     interventionText?: string;
     onClose: () => void;
@@ -20,6 +21,7 @@ interface CareSceneOverlayLayerProps {
 export const CareSceneOverlayLayer: React.FC<CareSceneOverlayLayerProps> = ({
     activeCareScene,
     medicationName,
+    medicationImageUrl,
     riskLevel,
     interventionText,
     onClose,
@@ -44,6 +46,7 @@ export const CareSceneOverlayLayer: React.FC<CareSceneOverlayLayerProps> = ({
         return (
             <MedicationScene
                 medicationName={medicationName || '日常药物'}
+                medicationImageUrl={medicationImageUrl}
                 onTaken={onMedicationTaken}
                 onRemindLater={onMedicationRemindLater}
                 onContactFamily={onContactFamily}

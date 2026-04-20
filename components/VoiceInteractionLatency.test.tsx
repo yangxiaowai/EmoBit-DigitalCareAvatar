@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type MockRecognitionEvent = {
   results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;

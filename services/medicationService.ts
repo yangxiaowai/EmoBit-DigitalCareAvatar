@@ -55,6 +55,13 @@ export class MedicationService {
     private checkInterval: any = null;
     private lastCheckedMinute: string = '';
 
+    private resolveMedicationImageUrl(medication: Medication): string | undefined {
+        if (medication.name.includes('二甲双胍')) return '/medication/二甲双胍药盒.jpg';
+        if (medication.name.includes('盐酸奥司他韦')) return '/medication/盐酸奥司他韦.jpg';
+        if (medication.imageUrl && medication.imageUrl.trim()) return medication.imageUrl;
+        return medication.imageUrl;
+    }
+
     constructor() {
         this.loadMedications();
         this.loadLogs();
@@ -154,7 +161,7 @@ export class MedicationService {
                 times: ['08:00', '18:00'],
                 instructions: '饭后服用',
                 purpose: '控制血糖',
-                imageUrl: 'https://images.unsplash.com/photo-1585435557343-3b092031a831?w=200',
+                imageUrl: '/medication/二甲双胍药盒.jpg',
             },
             {
                 id: 'med_3',
@@ -262,9 +269,13 @@ export class MedicationService {
      */
     triggerReminder(medication: Medication, scheduledTime: string): void {
         console.log('[Medication] 触发提醒:', medication.name);
+        const normalizedMedication: Medication = {
+            ...medication,
+            imageUrl: this.resolveMedicationImageUrl(medication),
+        };
 
         this.activeReminder = {
-            medication,
+            medication: normalizedMedication,
             scheduledTime,
             isActive: true,
             snoozeCount: 0,
@@ -277,7 +288,7 @@ export class MedicationService {
         // 通知订阅者
         this.notify({
             type: 'reminder',
-            medication,
+            medication: normalizedMedication,
             scheduledTime,
             timestamp: new Date(),
         });

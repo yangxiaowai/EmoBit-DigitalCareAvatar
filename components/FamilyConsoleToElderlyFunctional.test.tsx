@@ -361,10 +361,10 @@ describe('Family console buttons (functional UI wiring)', () => {
 
   });
 
-  it('uses family console to trigger medication reminder (pending) -> MedicationReminder modal', async () => {
+  it('uses family console to trigger medication reminder (pending) -> MedicationScene overlay', async () => {
     render(<ElderlyApp status={SystemStatus.NORMAL} simulation={SimulationType.NONE} externalMessage={null} externalAction={null} />);
 
-    // 等待 MedicationReminder 订阅到 medicationService 事件处理器
+    // 等待 ElderlyApp 订阅 medicationService
     await waitFor(() => {
       expect(medicationSubscribers.size).toBeGreaterThan(0);
     });
@@ -373,40 +373,31 @@ describe('Family console buttons (functional UI wiring)', () => {
     fireEvent.click(pendingBtns[0]);
 
     expect(triggerReminderMock).toHaveBeenCalled();
-    // 老人端弹层：reminder UI
-    expect(await screen.findByText('该吃药啦')).toBeInTheDocument();
-    expect(screen.getByText(presetMedication.name)).toBeInTheDocument();
+    // 老人端全屏用药场景（替代原 MedicationReminder 弹窗文案）
+    expect(await screen.findByText('现在该吃药')).toBeInTheDocument();
+    expect(screen.getByText((t) => typeof t === 'string' && t.includes(`按时服用 ${presetMedication.name}`))).toBeInTheDocument();
 
     // 控制台操作结果
     expect(screen.getByText(/已触发未服药提醒：/)).toBeInTheDocument();
 
   });
 
-  it('uses family console to confirm taken (taken) -> confirmation UI auto hides after 3s', async () => {
+  it('uses family console to confirm taken (taken) -> closes medication scene and updates console', async () => {
     render(<ElderlyApp status={SystemStatus.NORMAL} simulation={SimulationType.NONE} externalMessage={null} externalAction={null} />);
 
     await waitFor(() => {
       expect(medicationSubscribers.size).toBeGreaterThan(0);
     });
 
-    // 先触发 reminder，再确认 taken（更贴近真实操作顺序）
     const pendingBtns = screen.getAllByRole('button', { name: /未服药提醒/ });
     fireEvent.click(pendingBtns[0]);
-    expect((await screen.findAllByText('该吃药啦')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('现在该吃药')).length).toBeGreaterThan(0);
 
     const takenBtns = screen.getAllByRole('button', { name: /已服药确认/ });
     fireEvent.click(takenBtns[0]);
 
     expect(confirmTakenMock).toHaveBeenCalled();
-    // 立即出现确认界面
-    expect(await screen.findByText('已记录服药')).toBeInTheDocument();
-
-    // 3 秒后自动关闭
-    await new Promise((r) => setTimeout(r, 3100));
-    expect(screen.queryByText('已记录服药')).toBeNull();
-
-    // 控制台应有“已记录服药完成”文案
-    expect(screen.getByText(/已记录服药完成：/)).toBeInTheDocument();
+    expect(await screen.findByText(/已记录服药完成：/)).toBeInTheDocument();
 
   });
 });

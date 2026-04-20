@@ -1,5 +1,6 @@
 import React from 'react';
 import { Camera, ScanFace, CheckCircle, X, Phone } from 'lucide-react';
+import SafeImage from '../../common/SafeImage';
 
 interface FaceSceneProps {
     status: 'scanning' | 'matched' | 'unknown';
@@ -49,7 +50,12 @@ export const FaceScene: React.FC<FaceSceneProps> = ({
                     ) : status === 'matched' && recognizedFace ? (
                         <div className="flex flex-col items-center">
                             <div className="w-48 h-48 rounded-[2.5rem] border-4 border-emerald-400 overflow-hidden shadow-xl mb-6">
-                                <img src={recognizedFace.imageUrl} className="w-full h-full object-cover" alt="Recognized face" />
+                                <SafeImage
+                                    src={recognizedFace.imageUrl}
+                                    className="w-full h-full object-cover"
+                                    alt="Recognized face"
+                                    fallback={<div className="w-full h-full bg-slate-200" />}
+                                />
                             </div>
                             <h3 className="text-2xl font-black text-slate-800 mb-1">
                                 {recognizedFace.relation} {recognizedFace.name}

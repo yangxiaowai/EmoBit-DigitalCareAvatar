@@ -29,6 +29,7 @@ import {
 import AvatarCreator from './AvatarCreator';
 import ARNavigationOverlay from './ARNavigationOverlay';
 import CognitiveReport from './CognitiveReport';
+import SafeImage from './common/SafeImage';
 import { MobileShellFrame } from './elderly/layers/MobileShellFrame';
 import { CompanionHomeLayer } from './elderly/layers/CompanionHomeLayer';
 import { CareSceneOverlayLayer, CareSceneType } from './elderly/layers/CareSceneOverlayLayer';
@@ -323,7 +324,12 @@ const FaceRecognitionFlow = ({ step, onClose }: { step: number; onClose: () => v
         return (
             <div className="absolute inset-0 z-50 bg-black flex flex-col animate-fade-in font-sans">
                 <div className="flex-1 relative overflow-hidden">
-                    <img src={faceImageUrl} className="w-full h-full object-cover" alt="摄像头画面" />
+                    <SafeImage
+                        src={faceImageUrl}
+                        className="w-full h-full object-cover"
+                        alt="摄像头画面"
+                        fallback={<div className="w-full h-full bg-slate-900" />}
+                    />
                     <div className="absolute inset-0 border-4 border-indigo-400/50 rounded-lg m-4 pointer-events-none">
                         <div className="absolute top-4 left-4 bg-black/60 text-white px-3 py-1 rounded-full text-sm flex items-center gap-2">
                             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
@@ -360,7 +366,12 @@ const FaceRecognitionFlow = ({ step, onClose }: { step: number; onClose: () => v
         <div className="absolute inset-0 z-50 bg-slate-900 flex flex-col animate-fade-in font-sans">
             <div className="flex-1 flex flex-col items-center justify-center p-6">
                 <div className="relative w-48 h-48 rounded-2xl overflow-hidden border-4 border-emerald-400 shadow-2xl mb-6">
-                    <img src={faceImageUrl} className="w-full h-full object-cover" alt={face.relation} />
+                    <SafeImage
+                        src={faceImageUrl}
+                        className="w-full h-full object-cover"
+                        alt={face.relation}
+                        fallback={<div className="w-full h-full bg-slate-800" />}
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
                         <p className="text-2xl font-black">{face.name ? `${face.relation} ${face.name}` : face.relation}</p>
@@ -445,11 +456,16 @@ const MemoriesFlow = ({ step, onClose, onPrev, onNext }: { step: number; onClose
             {/* 照片区域：绝对定位，top-14 bottom-[280px] 可单独调整照片上下位置 */}
             <div className="absolute top-14 left-0 right-0 bottom-[260px] flex items-center justify-center">
                 <div className="scale-110 max-w-full max-h-full flex items-center justify-center">
-                    <img
+                    <SafeImage
                         key={photo.id}
                         src={photo.url}
                         className="max-w-full max-h-full object-contain"
                         alt="Memory"
+                        fallback={
+                            <div className="max-w-full max-h-full w-[78vw] h-[42vh] rounded-2xl border border-dashed border-white/25 bg-white/5 flex items-center justify-center px-6 text-center text-white/60">
+                                照片暂时无法加载
+                            </div>
+                        }
                     />
                 </div>
             </div>
@@ -662,6 +678,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
     const [activeScenario, setActiveScenario] = useState<'none' | 'nav' | 'meds' | 'memory' | 'face'>('none');
     const [activeCareScene, setActiveCareScene] = useState<CareSceneType>('none');
     const [careSceneMedicationName, setCareSceneMedicationName] = useState<string>('日常药物');
+    const [careSceneMedicationImageUrl, setCareSceneMedicationImageUrl] = useState<string | undefined>(undefined);
     const [step, setStep] = useState(0);
     const [voiceInputDisplay, setVoiceInputDisplay] = useState<string | null>(null);
 
@@ -899,13 +916,16 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
         setCognitiveTrendAverage(cognitiveService.getTrend().average);
     }, []);
 
-    const openCareScene = useCallback((scene: CareSceneType, medicationName?: string) => {
+    const openCareScene = useCallback((scene: CareSceneType, medicationName?: string, medicationImageUrl?: string) => {
         if (scene !== 'none') {
             setActiveScenario('none');
             setStep(0);
         }
         if (medicationName) {
             setCareSceneMedicationName(medicationName);
+        }
+        if (typeof medicationImageUrl === 'string') {
+            setCareSceneMedicationImageUrl(medicationImageUrl);
         }
         setActiveCareScene(scene);
     }, []);
@@ -945,7 +965,8 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
         const unsubscribeMedication = medicationService.subscribe((event) => {
             if (event.type === 'reminder') {
                 setCareSceneMedicationName(event.medication.name);
-                openCareScene('medication', event.medication.name);
+                setCareSceneMedicationImageUrl(event.medication.imageUrl);
+                openCareScene('medication', event.medication.name, event.medication.imageUrl);
             }
             if (event.type === 'taken' || event.type === 'snooze') {
                 closeCareScene();
@@ -2225,7 +2246,14 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
                                 {/* Simulated Camera Feed */}
                                 <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
                                     {!recognizedFace && <Camera size={48} className="text-slate-600 opacity-50" />}
-                                    {recognizedFace && <img src={recognizedFace.imageUrl} className="w-full h-full object-cover animate-fade-in" />}
+                                    {recognizedFace && (
+                                        <SafeImage
+                                            src={recognizedFace.imageUrl}
+                                            className="w-full h-full object-cover animate-fade-in"
+                                            alt={recognizedFace.name || recognizedFace.relation}
+                                            fallback={<Camera size={48} className="text-slate-600 opacity-50" />}
+                                        />
+                                    )}
                                 </div>
 
                                 {/* Scanning Effect */}
@@ -2290,6 +2318,7 @@ const ElderlyApp: React.FC<ElderlyAppProps> = ({ status, simulation, externalMes
                 <CareSceneOverlayLayer
                     activeCareScene={activeCareScene}
                     medicationName={careSceneMedicationName}
+                    medicationImageUrl={careSceneMedicationImageUrl}
                     riskLevel={sundowningSnapshot.riskLevel}
                     interventionText={activeSundowningPlan?.script || sundowningAlerts[0]?.message}
                     onClose={closeCareScene}
