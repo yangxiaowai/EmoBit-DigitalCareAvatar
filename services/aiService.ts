@@ -1,6 +1,6 @@
 /**
  * AI 对话服务
- * 接入 Groq API 实现智能对话
+ * 接入 DeepSeek API 实现智能对话
  * 支持老人档案记忆、个性化回复及子女端设置的用药提醒
  */
 
@@ -73,8 +73,8 @@ class AIService {
     private maxHistoryLength = 20;
 
     constructor() {
-        // 从环境变量加载 API Key (Groq)
-        this.apiKey = import.meta.env.VITE_GROQ_API_KEY || '';
+        // 从环境变量加载 API Key（优先 DeepSeek，兼容旧 Groq 变量）
+        this.apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY || import.meta.env.VITE_GROQ_API_KEY || '';
         // 加载老人档案
         this.loadProfile();
     }
@@ -88,6 +88,8 @@ class AIService {
      */
     setApiKey(key: string): void {
         this.apiKey = key;
+        localStorage.setItem('emobit_llm_key', key);
+        // 兼容旧版本读取逻辑
         localStorage.setItem('emobit_groq_key', key);
     }
 
@@ -96,7 +98,9 @@ class AIService {
      */
     getApiKey(): string {
         if (!this.apiKey) {
-            this.apiKey = localStorage.getItem('emobit_groq_key') || '';
+            this.apiKey = localStorage.getItem('emobit_llm_key')
+                || localStorage.getItem('emobit_groq_key')
+                || '';
         }
         return this.apiKey;
     }
@@ -288,11 +292,11 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
             return response;
         }
 
-        console.log('[AI] 🔄 复杂问题，调用 Groq API...');
+        console.log('[AI] 🔄 复杂问题，调用 DeepSeek API...');
 
         try {
-            const response = await this.callGroqAPI(userMessage);
-            console.log('[AI] ✅ Groq API 回复:', response.text);
+            const response = await this.callDeepSeekAPI(userMessage);
+            console.log('[AI] ✅ DeepSeek API 回复:', response.text);
             console.log('[AI] ============================================================');
 
             // 添加回复到历史
@@ -304,7 +308,7 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
 
             return response;
         } catch (error) {
-            console.error('[AI] ❌ Gemini API 调用失败:', error);
+            console.error('[AI] ❌ DeepSeek API 调用失败:', error);
             console.error('[AI] 错误详情:', error instanceof Error ? error.stack : String(error));
             // 回退到本地回复
             console.log('[AI] ⚠️ 使用本地回复作为回退方案');
@@ -383,13 +387,13 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
     }
 
     /**
-     * 调用 Groq API（OpenAI 兼容格式）
+     * 调用 DeepSeek API（OpenAI 兼容格式）
      */
-    private async callGroqAPI(userMessage: string): Promise<AIResponse> {
+    private async callDeepSeekAPI(userMessage: string): Promise<AIResponse> {
         const apiKey = this.getApiKey();
-        const model = 'llama-3.1-8b-instant'; // Groq 免费模型
+        const model = 'deepseek-chat';
 
-        const url = 'https://api.groq.com/openai/v1/chat/completions';
+        const url = 'https://api.deepseek.com/chat/completions';
 
         // 构建 OpenAI 格式的消息
         const messages = [
@@ -407,7 +411,7 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
             }
         ];
 
-        console.log(`[AI] 调用 Groq API (${model})...`);
+        console.log(`[AI] 调用 DeepSeek API (${model})...`);
 
         const response = await fetch(url, {
             method: 'POST',
@@ -425,13 +429,13 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
 
         // 处理429限流错误
         if (response.status === 429) {
-            console.warn('[AI] Groq API 限流 (429)，使用本地回复');
+            console.warn('[AI] DeepSeek API 限流 (429)，使用本地回复');
             return this.getLocalResponse(userMessage);
         }
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[AI] Groq API 错误:', response.status, errorText);
+            console.error('[AI] DeepSeek API 错误:', response.status, errorText);
             throw new Error(`API error: ${response.status}`);
         }
 
@@ -566,11 +570,11 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
     }
 
     /**
-     * 一次性调用 Groq API（不写入对话历史），用于健康简报等
+     * 一次性调用 DeepSeek API（不写入对话历史），用于健康简报等
      */
-    private async callGroqOnce(systemContent: string, userContent: string, options?: { maxTokens?: number }): Promise<string> {
+    private async callDeepSeekOnce(systemContent: string, userContent: string, options?: { maxTokens?: number }): Promise<string> {
         const apiKey = this.getApiKey();
-        const url = 'https://api.groq.com/openai/v1/chat/completions';
+        const url = 'https://api.deepseek.com/chat/completions';
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -578,7 +582,7 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
                 'Authorization': `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: 'llama-3.1-8b-instant',
+                model: 'deepseek-chat',
                 messages: [
                     { role: 'system', content: systemContent },
                     { role: 'user', content: userContent },
@@ -661,7 +665,7 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
 请直接输出三小节内容，使用 ## 作为小节标题。`;
 
         try {
-            const text = await this.callGroqOnce(system, user, { maxTokens: 800 });
+            const text = await this.callDeepSeekOnce(system, user, { maxTokens: 800 });
             return text || this.buildLocalHealthBrief(bpm, pressure, sleep);
         } catch (e) {
             console.warn('[AI] generateHealthBrief failed:', e);
@@ -756,7 +760,7 @@ JSON 结构（字段名必须一致）：
             : `近期暂无具体交互数据。请生成上述 JSON，使用合理的示范分数与示例文案（近期交互评估、陪伴建议、fullReport 的 Markdown），便于家属理解认知评估界面。`;
 
         try {
-            const text = await this.callGroqOnce(system, user, { maxTokens: 1400 });
+            const text = await this.callDeepSeekOnce(system, user, { maxTokens: 1400 });
             const cleaned = text?.replace(/^[\s\S]*?\{/, '{').replace(/\}[\s\S]*$/, '}').trim();
             const parsed = JSON.parse(cleaned || '{}') as Partial<CognitiveBrief>;
             const dims = parsed.dimensions && parsed.dimensions.length >= 4
@@ -816,7 +820,7 @@ JSON 结构（字段名必须一致）：
     }
 
     /**
-     * 环境语义分析（子女端）：基于当前位置地址与周边 POI，用 Groq 分析老人周边环境是否安全、描述地理位置特征，帮助子女确认老人所在地
+     * 环境语义分析（子女端）：基于当前位置地址与周边 POI，用 DeepSeek 分析老人周边环境是否安全、描述地理位置特征，帮助子女确认老人所在地
      */
     async analyzeEnvironmentForGuardian(address: string, nearbyPoiNames: string[]): Promise<string> {
         if (!this.getApiKey()) {
@@ -848,7 +852,7 @@ JSON 结构（字段名必须一致）：
         const user = `老人当前定位地址：${address}\n${poisText}\n\n请按 Markdown 格式输出环境语义分析（含 ## 安全评估、## 地理位置特征，用 **加粗** 标出重点），帮助家属确认老人所在地与环境是否安全。`;
 
         try {
-            const text = await this.callGroqOnce(system, user, { maxTokens: 600 });
+            const text = await this.callDeepSeekOnce(system, user, { maxTokens: 600 });
             const result = text?.trim() || this.buildLocalEnvironmentAnalysis(address, nearbyPoiNames);
             this.environmentCache.set(key, { ts: Date.now(), text: result });
             return result;
