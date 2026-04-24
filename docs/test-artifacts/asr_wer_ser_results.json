@@ -1,0 +1,7 @@
+{
+  "status": "reference_missing",
+  "manifest": "docs/test-artifacts/asr_eval_manifest.template.csv",
+  "total_rows": 50,
+  "rows_with_reference": 0,
+  "message": "没有人工参考转写，无法计算真实 WER/SER。请填写 reference 列。"
+}

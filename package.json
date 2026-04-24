@@ -16,6 +16,8 @@
     "test:unit": "vitest run -c vitest.unit.config.ts",
     "test:functional": "vitest run -c vitest.functional.config.ts --passWithNoTests",
     "test:functional:live": "VITEST_REAL_SERVICES=1 vitest run -c vitest.functional.config.ts tests/real --passWithNoTests",
+    "test:asr:wer-ser:template": "python3 scripts/evaluate_asr_wer_ser.py --audio-root val/Audio_files --template-out docs/test-artifacts/asr_eval_manifest.template.csv --limit 50",
+    "test:asr:wer-ser": "python3 scripts/evaluate_asr_wer_ser.py --manifest docs/test-artifacts/asr_eval_manifest.template.csv --funasr-url ws://127.0.0.1:10095",
     "test:system": "vitest run -c vitest.system.config.ts --passWithNoTests",
     "test:coverage": "vitest run --coverage",
     "openclaw:bridge": "node openclaw/bridge/server.mjs",

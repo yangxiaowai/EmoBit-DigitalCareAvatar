@@ -66,6 +66,22 @@ export interface CognitiveBrief {
     fullReport: string;
 }
 
+export interface GuardianDailyStructuredReport {
+    score: number;
+    riskLevel: 'low' | 'medium' | 'high';
+    indicators: {
+        bpm: number;
+        pressure: string;
+        sleep: number;
+    };
+    alerts: string[];
+}
+
+export interface GuardianDailyReport {
+    structured: GuardianDailyStructuredReport;
+    narrative: string;
+}
+
 class AIService {
     private apiKey: string = '';
     private profile: ElderlyProfile | null = null;
@@ -671,6 +687,93 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
             console.warn('[AI] generateHealthBrief failed:', e);
             return this.buildLocalHealthBrief(bpm, pressure, sleep);
         }
+    }
+
+    /**
+     * 生成家属日报（结构化 + 文案）
+     * 结构化评分本地稳定产出；文案优先云端，失败回退本地模板。
+     */
+    async generateGuardianDailyReport(
+        vitalSigns: { bpm?: number; pressure?: string; sleep?: number },
+        recentLogs: unknown[]
+    ): Promise<GuardianDailyReport> {
+        const bpm = vitalSigns.bpm ?? 75;
+        const pressure = vitalSigns.pressure ?? '120/80';
+        const sleep = vitalSigns.sleep ?? 7;
+        const structured = this.buildGuardianStructuredReport(bpm, pressure, sleep);
+
+        if (!this.getApiKey()) {
+            return {
+                structured,
+                narrative: this.buildLocalHealthBrief(bpm, pressure, sleep),
+            };
+        }
+
+        const system = `你是老年照护健康助理。请基于已提供的本地结构化评分基线，输出给家属阅读的健康日报文案。仅输出 Markdown 正文，包含以下三个二级标题并按顺序输出：
+## 今日关键结论
+## 详细指标解读
+## 子女照护建议
+
+要求：语气温和、具体、可执行；不要输出 JSON，不要额外前缀。`;
+
+        const user = `本地结构化评分结果（请据此撰写文案，避免与基线矛盾）：
+${JSON.stringify(structured, null, 2)}
+
+原始体征：
+${JSON.stringify({ bpm, pressure, sleep }, null, 2)}
+
+近期日志摘要：
+${JSON.stringify(recentLogs ?? [], null, 2)}`;
+
+        try {
+            const narrative = await this.callDeepSeekOnce(system, user, { maxTokens: 800 });
+            return {
+                structured,
+                narrative: narrative || this.buildLocalHealthBrief(bpm, pressure, sleep),
+            };
+        } catch (e) {
+            console.warn('[AI] generateGuardianDailyReport failed:', e);
+            return {
+                structured,
+                narrative: this.buildLocalHealthBrief(bpm, pressure, sleep),
+            };
+        }
+    }
+
+    private buildGuardianStructuredReport(bpm: number, pressure: string, sleep: number): GuardianDailyStructuredReport {
+        const [systolicStr, diastolicStr] = pressure.split('/').map(s => s.trim());
+        const sys = parseInt(systolicStr, 10) || 120;
+        const dia = parseInt(diastolicStr, 10) || 80;
+        const alerts: string[] = [];
+        let score = 100;
+
+        if (bpm < 60 || bpm > 100) {
+            alerts.push(`心率异常（${bpm}次/分）`);
+            score -= 20;
+        }
+        if (sys >= 140 || dia >= 90) {
+            alerts.push(`血压偏高（${sys}/${dia}mmHg）`);
+            score -= 25;
+        } else if (sys >= 130 || dia >= 85) {
+            alerts.push(`血压略高（${sys}/${dia}mmHg）`);
+            score -= 12;
+        }
+        if (sleep < 6) {
+            alerts.push(`睡眠不足（${sleep}小时）`);
+            score -= 15;
+        } else if (sleep < 7) {
+            score -= 6;
+        }
+
+        score = Math.max(0, Math.min(100, score));
+        const riskLevel: GuardianDailyStructuredReport['riskLevel'] = score >= 90 ? 'low' : score >= 75 ? 'medium' : 'high';
+
+        return {
+            score,
+            riskLevel,
+            indicators: { bpm, pressure, sleep },
+            alerts,
+        };
     }
 
     /**

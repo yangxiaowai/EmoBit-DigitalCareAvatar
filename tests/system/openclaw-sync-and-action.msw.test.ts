@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { OpenClawActionService } from '@/services/openclawActionService';
 import { OpenClawSyncService } from '@/services/openclawSyncService';
