@@ -1,18 +1,21 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
 
+const rootDir = path.resolve(__dirname, '../..');
+
 export default defineConfig({
+  root: rootDir,
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'frontend'),
-      '@backend': path.resolve(__dirname, 'backend'),
-      '@tests': path.resolve(__dirname, 'tests'),
-      '@root': path.resolve(__dirname, '.'),
+      '@': path.resolve(rootDir, 'frontend'),
+      '@backend': path.resolve(rootDir, 'backend'),
+      '@tests': path.resolve(rootDir, 'tests'),
+      '@root': rootDir,
     },
   },
   test: {
     environment: 'jsdom',
-    setupFiles: ['tests/setup/setup.ts'],
+    setupFiles: [path.resolve(rootDir, 'tests/setup/setup.ts')],
     include: ['**/*.{test,spec}.{ts,tsx,js,jsx}'],
     exclude: ['node_modules/**', 'dist/**'],
     testTimeout: 30_000,

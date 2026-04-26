@@ -22,7 +22,7 @@
 
 ### 2.1 报告中“单元测试”在测什么（写进图注或答辩可讲）
 
-单元测试面向 **Node 环境** 下的 **纯逻辑与业务服务**，不启动浏览器、不连真实 FunASR/语音克隆/Bridge。执行命令为 `npm run test:unit`，配置文件为 `vitest.unit.config.ts`。
+单元测试面向 **Node 环境** 下的 **纯逻辑与业务服务**，不启动浏览器、不连真实 FunASR/语音克隆/Bridge。执行命令为 `npm run test:unit`，配置文件为 `tests/config/vitest.unit.config.ts`。
 
 **覆盖模块与证据类型（需在图中概括或列表呈现）：**
 
@@ -51,7 +51,7 @@
 
 2. **第一层横条（白底细边框）—“执行与环境”**  
    - 主命令：`npm run test:unit`  
-   - 配置：`vitest.unit.config.ts`  
+   - 配置：`tests/config/vitest.unit.config.ts`  
    - 环境关键词：`Node`、无 `JSDOM`  
    - 证据：`终端通过摘要`、`可选覆盖率`
 
@@ -75,7 +75,7 @@
 ```text
 Professional software engineering infographic, landscape 16:9, 1920x1080, clean light gray gradient background, minimal flat design, no cartoon characters, no stock photos. Title centered at top in bold Chinese: "图 2-0 单元测试分层与对象范围（Vitest / Node）".
 
-Below title: a wide white rounded rectangle labeled "执行与环境" containing monospace text "npm run test:unit" and "vitest.unit.config.ts", plus labels "Node", "无浏览器 DOM", "证据: 终端通过 / 可选覆盖率".
+Below title: a wide white rounded rectangle labeled "执行与环境" containing monospace text "npm run test:unit" and "tests/config/vitest.unit.config.ts", plus labels "Node", "无浏览器 DOM", "证据: 终端通过 / 可选覆盖率".
 
 Below that: two equal large rounded panels side by side.
 Left panel light blue border: title "utils/", subtitle "规则守卫、纯逻辑", small text "*.test.ts", example "openclawMessageGuards".
@@ -87,7 +87,7 @@ Footer small text: "离线可复现，不依赖真实后端". High contrast, rea
 **中文辅助说明（可作为“创意描述”补充）：**
 
 ```text
-信息图，横版 16:9，学术比赛测试报告风格。标题：图 2-0 单元测试分层与对象范围（Vitest / Node）。上层白框写执行命令 npm run test:unit、配置文件 vitest.unit.config.ts、Node 环境。下层左右两栏：左栏蓝色 utils 规则与守卫；右栏绿色 services 业务模块（游走、黄昏、用药、健康、OpenClaw）。底部注明 mock 与假计时器隔离。画面简洁、无装饰插画。
+信息图，横版 16:9，学术比赛测试报告风格。标题：图 2-0 单元测试分层与对象范围（Vitest / Node）。上层白框写执行命令 npm run test:unit、配置文件 tests/config/vitest.unit.config.ts、Node 环境。下层左右两栏：左栏蓝色 utils 规则与守卫；右栏绿色 services 业务模块（游走、黄昏、用药、健康、OpenClaw）。底部注明 mock 与假计时器隔离。画面简洁、无装饰插画。
 ```
 
 ---
@@ -96,7 +96,7 @@ Footer small text: "离线可复现，不依赖真实后端". High contrast, rea
 
 ### 3.1 报告中“功能测试”在测什么
 
-功能测试在 **JSDOM + React Testing Library** 下验证 **组件交互与页面契约**，默认 **不依赖** 真实 FunASR、语音克隆 WebSocket。命令：`npm run test:functional`，配置：`vitest.functional.config.ts`。
+功能测试在 **JSDOM + React Testing Library** 下验证 **组件交互与页面契约**，默认 **不依赖** 真实 FunASR、语音克隆 WebSocket。命令：`npm run test:functional`，配置：`tests/config/vitest.functional.config.ts`。
 
 **契约层覆盖（应在图中体现为模块分组）：**
 
@@ -122,7 +122,7 @@ Footer small text: "离线可复现，不依赖真实后端". High contrast, rea
 
 2. **第一横条（白底，实线框）—“契约层”**  
    - `npm run test:functional`  
-   - `vitest.functional.config.ts` + `Testing Library` + `JSDOM`  
+   - `tests/config/vitest.functional.config.ts` + `Testing Library` + `JSDOM`  
    - 小字：`components/*.test.tsx`、`App.test.tsx`
 
 3. **第二横条（浅橙底或虚线边框）—“真实联调层（可选）”**  
@@ -147,7 +147,7 @@ Professional software testing infographic, landscape 16:9, 1920x1080, light purp
 
 Title centered: "图 3-0 功能测试分层与证据形态（Vitest / JSDOM）".
 
-Section 1 white rounded box with solid border: heading "契约层（CI / 离线）", monospace "npm run test:functional", text "vitest.functional.config.ts · React Testing Library · JSDOM", file hints "components/*.test.tsx · App.test.tsx".
+Section 1 white rounded box with solid border: heading "契约层（CI / 离线）", monospace "npm run test:functional", text "tests/config/vitest.functional.config.ts · React Testing Library · JSDOM", file hints "components/*.test.tsx · App.test.tsx".
 
 Section 2 below with dashed orange border or light orange fill: heading "真实联调层（可选）", monospace "npm run test:functional:live", text "FunASR WebSocket · Voice clone WebSocket · tests/real", metrics line "REAL_FUNASR_* · REAL_VOICE_CLONE_*".
 

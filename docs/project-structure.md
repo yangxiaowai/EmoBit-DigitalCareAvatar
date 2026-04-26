@@ -30,8 +30,7 @@ frontend/
 ├── services/              # 前端业务服务与远端 API Client
 ├── hooks/                 # React hooks
 ├── utils/                 # 前端工具函数
-├── config/                # 前端业务配置
-└── prototype/             # 历史原型/导入稿，非主运行入口
+└── config/                # 前端业务配置
 ```
 
 `@/` 路径别名指向 `frontend/`，例如：
@@ -104,6 +103,7 @@ backend/bridge/data/state.json
 
 ```text
 tests/
+├── config/                # Vitest 分层配置
 ├── setup/                 # Vitest setup 与 MSW mock
 ├── unit/                  # 单元测试
 ├── functional/            # 前端功能测试

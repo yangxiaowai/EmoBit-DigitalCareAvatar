@@ -42,7 +42,7 @@
 
 #### 自动化测试体系（Vitest 分层落地）
 
-为满足大赛模板对“单元测试—功能测试—系统测试”三层结构的要求，并降低人工回归成本，本项目在仓库内引入基于 Vitest 的自动化测试体系，形成可一键复现、可在持续集成中稳定执行的测试基线。自动化体系采用“三套配置文件分层隔离”的工程化方式落地：单元测试使用 `vitest.unit.config.ts`，功能测试使用 `vitest.functional.config.ts`，系统测试使用 `vitest.system.config.ts`；统一的测试运行环境与网络模拟由 `src/test/setup.ts` 启动，Bridge 端的接口行为通过 MSW（`src/test/msw/`*）在测试进程内模拟，从而使 OpenClaw 集成链路在无需真实 Bridge/飞书的情况下即可稳定复现与断言。
+为满足大赛模板对“单元测试—功能测试—系统测试”三层结构的要求，并降低人工回归成本，本项目在仓库内引入基于 Vitest 的自动化测试体系，形成可一键复现、可在持续集成中稳定执行的测试基线。自动化体系采用“三套配置文件分层隔离”的工程化方式落地：单元测试使用 `tests/config/vitest.unit.config.ts`，功能测试使用 `tests/config/vitest.functional.config.ts`，系统测试使用 `tests/config/vitest.system.config.ts`；统一的测试运行环境与网络模拟由 `tests/setup/setup.ts` 启动，Bridge 端的接口行为通过 MSW（`tests/setup/msw/`*）在测试进程内模拟，从而使 OpenClaw 集成链路在无需真实 Bridge/飞书的情况下即可稳定复现与断言。
 
 自动化体系的设计遵循“逻辑可验证、外部可模拟、证据可追溯”的原则：在单元测试层聚焦 `utils/`* 与 `services/`* 的确定性逻辑与协议守卫（例如 `utils/openclawMessageGuards.test.ts`），确保关键规则在边界条件下的输出可复核；在功能测试层以组件渲染与交互行为为中心，使用 JSDOM 环境与 Testing Library 对 UI 交互进行验证（例如 `components/Sidebar.test.tsx` 对关键模拟按钮的触发回调进行断言），从而把“按钮入口可触发”的验收要求固化为可重复执行的用例；在系统测试层采用“跨模块链路 + 协议契约”的方式，把 `openclawSyncService`（状态/事件同步）与 `openclawActionService`（outbound 动作）串联起来，在 MSW 模拟 Bridge 的前提下验证请求路径、header（token）、payload envelope 与关键时序（例如 `tests/system/openclaw-sync-and-action.msw.test.ts`），确保集成契约稳定不漂移。该体系使得测试记录不再仅依赖截图与手工复现，而能够输出可审阅的命令与用例执行结果，符合竞赛材料对严谨性与可复核性的要求。
 
@@ -772,7 +772,7 @@
 
 ## 4 系统测试（模型/规则性能 + 集成稳定性）
 
-在本项目的工程语义中，“系统测试”以“跨模块链路与协议契约可复现”为核心目标：它不依赖真实 Bridge/真实通道，而是在测试进程中通过 MSW 模拟 Bridge 接口，验证 OpenClaw 集成链路的请求结构、鉴权 header、封包字段与关键时序。该策略的意义在于把不稳定的外部依赖（飞书、OpenClaw Gateway、网络波动）从系统测试证据中剥离，使系统测试能够在任何环境下稳定复现，从而成为竞赛材料中可审阅、可复核的“集成契约证明”。本项目系统测试命令为 `npm run test:system`，使用 `vitest.system.config.ts`，并复用 `src/test/setup.ts` 启动的 MSW 服务器。
+在本项目的工程语义中，“系统测试”以“跨模块链路与协议契约可复现”为核心目标：它不依赖真实 Bridge/真实通道，而是在测试进程中通过 MSW 模拟 Bridge 接口，验证 OpenClaw 集成链路的请求结构、鉴权 header、封包字段与关键时序。该策略的意义在于把不稳定的外部依赖（飞书、OpenClaw Gateway、网络波动）从系统测试证据中剥离，使系统测试能够在任何环境下稳定复现，从而成为竞赛材料中可审阅、可复核的“集成契约证明”。本项目系统测试命令为 `npm run test:system`，使用 `tests/config/vitest.system.config.ts`，并复用 `tests/setup/setup.ts` 启动的 MSW 服务器。
 
 ### 4.0 自动化系统测试结果摘要
 
