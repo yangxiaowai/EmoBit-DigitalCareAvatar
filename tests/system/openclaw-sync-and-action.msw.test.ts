@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { OpenClawActionService } from '@/services/openclawActionService';
 import { OpenClawSyncService } from '@/services/openclawSyncService';
-import { bridgeRequestLog } from '@/src/test/msw/handlers';
+import { bridgeRequestLog } from '@tests/setup/msw/handlers';
 
 describe('system/openclaw sync+action via msw', () => {
   it('posts event envelope with token header', async () => {
@@ -91,4 +91,3 @@ describe('system/openclaw sync+action via msw', () => {
     });
   });
 });
-

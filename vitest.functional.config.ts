@@ -4,18 +4,18 @@ import path from 'path';
 export default defineConfig({
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, '.'),
+      '@': path.resolve(__dirname, 'frontend'),
+      '@backend': path.resolve(__dirname, 'backend'),
+      '@tests': path.resolve(__dirname, 'tests'),
+      '@root': path.resolve(__dirname, '.'),
     },
   },
   test: {
     name: 'functional',
     environment: 'jsdom',
-    setupFiles: ['src/test/setup.ts'],
+    setupFiles: ['tests/setup/setup.ts'],
     include: [
-      '*.{test,spec}.tsx',
-      'components/**/*.{test,spec}.tsx',
-      'src/**/*.test.tsx',
-      'src/**/*.spec.tsx',
+      'tests/functional/**/*.{test,spec}.tsx',
       'tests/real/**/*.test.ts',
     ],
     exclude: ['tests/system/**', 'node_modules/**', 'dist/**'],
@@ -25,4 +25,3 @@ export default defineConfig({
     restoreMocks: true,
   },
 });
-

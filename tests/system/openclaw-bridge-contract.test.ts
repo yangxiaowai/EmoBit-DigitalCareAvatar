@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { OpenClawActionService } from '@/services/openclawActionService';
 import { OpenClawSyncService } from '@/services/openclawSyncService';
-import { bridgeRequestLog } from '@/src/test/msw/handlers';
+import { bridgeRequestLog } from '@tests/setup/msw/handlers';
 
 describe('system/openclaw bridge contract (msw)', () => {
   it('sync event then notify guardians (cross-module happy path)', async () => {
@@ -25,4 +25,3 @@ describe('system/openclaw bridge contract (msw)', () => {
     expect(bridgeRequestLog[1]!.url).toBe('http://127.0.0.1:4318/api/outbound/notify-guardians');
   });
 });
-

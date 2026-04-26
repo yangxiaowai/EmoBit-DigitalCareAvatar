@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import { buildContext } from './context.mjs';
 import { DataStore, HttpError } from './store.mjs';
 import { SqliteDataStore } from './sqliteStore.mjs';
+import { PostgresDataStore } from './postgresStore.mjs';
 
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 dotenv.config({ path: path.join(process.cwd(), '.env.local') });
@@ -17,8 +18,11 @@ const DEFAULT_PORT = Number(process.env.EMOBIT_DATA_SERVER_PORT || 4328);
 const DEFAULT_PUBLIC_BASE_URL = process.env.EMOBIT_DATA_SERVER_PUBLIC_BASE_URL || '';
 const DEFAULT_DATA_ROOT = process.env.EMOBIT_DATA_SERVER_ROOT || path.join(process.cwd(), 'backend', 'data-server', 'data');
 const DEFAULT_DB_PATH = process.env.EMOBIT_DATA_SERVER_DB_PATH || path.join(DEFAULT_DATA_ROOT, 'emobit-data.sqlite');
-const DEFAULT_STORAGE = (process.env.EMOBIT_DATA_SERVER_STORAGE || 'sqlite').trim().toLowerCase();
-const DEFAULT_LEGACY_STATE_PATH = process.env.EMOBIT_DATA_SERVER_LEGACY_STATE_PATH || path.join(process.cwd(), 'openclaw', 'bridge', 'data', 'state.json');
+const DEFAULT_STORAGE = (
+    process.env.EMOBIT_DATA_SERVER_STORAGE ||
+    (process.env.EMOBIT_POSTGRES_URL || process.env.DATABASE_URL ? 'postgres' : 'sqlite')
+).trim().toLowerCase();
+const DEFAULT_LEGACY_STATE_PATH = process.env.EMOBIT_DATA_SERVER_LEGACY_STATE_PATH || path.join(process.cwd(), 'backend', 'bridge', 'data', 'state.json');
 const DEFAULT_ELDER_ID = process.env.EMOBIT_ELDER_ID || 'elder_demo';
 const MAX_BODY_BYTES = Number(process.env.EMOBIT_DATA_SERVER_MAX_BODY_BYTES || 15 * 1024 * 1024);
 
@@ -47,6 +51,7 @@ export function createDataServer(options = {}) {
                     ok: true,
                     service: 'emobit-data-server',
                     storage: store.storageName || 'unknown',
+                    database: store.databaseLabel || store.dbPath || null,
                     dbPath: store.dbPath || null,
                     rootDir: store.rootDir,
                     legacyStatePath: store.legacyStatePath,
@@ -356,8 +361,8 @@ export async function startDataServer(options = {}) {
                     return;
                 }
                 try {
-                    if (typeof store.close === 'function') store.close();
-                    resolve();
+                    Promise.resolve(typeof store.close === 'function' ? store.close() : undefined)
+                        .then(resolve, reject);
                 } catch (closeError) {
                     reject(closeError);
                 }
@@ -373,10 +378,19 @@ function createDefaultStore(options = {}) {
         publicBaseUrl: options.publicBaseUrl || DEFAULT_PUBLIC_BASE_URL,
         defaultElderId: options.defaultElderId || DEFAULT_ELDER_ID,
     };
-    if ((options.storage || DEFAULT_STORAGE) === 'json') {
+    const storage = (options.storage || DEFAULT_STORAGE).trim().toLowerCase();
+    if (storage === 'json') {
         const store = new DataStore(common);
         store.storageName = 'json';
         return store;
+    }
+    if (storage === 'postgres' || storage === 'postgresql' || storage === 'pg') {
+        return new PostgresDataStore({
+            ...common,
+            connectionString: options.postgresUrl || options.connectionString,
+            poolMax: options.postgresPoolMax,
+            pool: options.postgresPool,
+        });
     }
     const store = new SqliteDataStore({
         ...common,

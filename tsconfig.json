@@ -17,6 +17,15 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": [
+        "./frontend/*"
+      ],
+      "@backend/*": [
+        "./backend/*"
+      ],
+      "@tests/*": [
+        "./tests/*"
+      ],
+      "@root/*": [
         "./*"
       ]
     },

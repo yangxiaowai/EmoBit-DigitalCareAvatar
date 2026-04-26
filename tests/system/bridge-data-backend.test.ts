@@ -5,9 +5,9 @@ import path from 'node:path';
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { DataStore } from '../../backend/data-server/store.mjs';
-import { createDataServer } from '../../backend/data-server/server.mjs';
-import { DataClient } from '../../openclaw/bridge/dataClient.mjs';
+import { DataStore } from '@backend/data-server/store.mjs';
+import { createDataServer } from '@backend/data-server/server.mjs';
+import { DataClient } from '@backend/bridge/dataClient.mjs';
 
 /**
  * Bridge ↔ Data Backend 集成测试

@@ -4,21 +4,20 @@ import path from 'path';
 export default defineConfig({
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, '.'),
+      '@': path.resolve(__dirname, 'frontend'),
+      '@backend': path.resolve(__dirname, 'backend'),
+      '@tests': path.resolve(__dirname, 'tests'),
+      '@root': path.resolve(__dirname, '.'),
     },
   },
   test: {
     name: 'unit',
     environment: 'node',
     include: [
-      'utils/**/*.{test,spec}.ts',
-      'services/**/*.{test,spec}.ts',
-      'backend/**/*.{test,spec}.{ts,js}',
-      'openclaw/**/*.{test,spec}.{ts,js}',
+      'tests/unit/**/*.{test,spec}.{ts,js}',
     ],
     exclude: [
       '**/*.{test,spec}.tsx',
-      'tests/**',
       'node_modules/**',
       'dist/**',
     ],

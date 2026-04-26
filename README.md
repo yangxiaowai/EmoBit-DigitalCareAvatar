@@ -4,6 +4,16 @@
 
 当前仓库保留前端、Bridge、独立 Data Backend、Android 内置后端与相关测试脚本，可直接在本地运行和演示。
 
+## Project Structure
+
+- `frontend/`：Web 前端源码，包含组件、业务服务、hooks、配置和场景事件核心。
+- `backend/`：后端代码，包含 `data-server/`、`bridge/` 和 `android/`；服务端主库推荐 PostgreSQL，本机演示保留 SQLite/JSON 回退。
+- `tests/`：测试代码，按 `unit/`、`functional/`、`system/`、`real/` 分层。
+- `public/`：Vite 静态资源。
+- `scripts/`：本地语音服务、性能测试和辅助脚本。
+
+更完整的目录和存储说明见 [docs/project-structure.md](docs/project-structure.md)。
+
 ## Run Locally
 
 **Prerequisites:**  Node.js
