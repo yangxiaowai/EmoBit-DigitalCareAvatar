@@ -45,6 +45,15 @@ export class DataStore {
         return ensureElderShape(elder);
     }
 
+    async listElders() {
+        await this.initialize();
+        const entries = await fs.readdir(this.eldersDir, { withFileTypes: true });
+        return entries
+            .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+            .map((entry) => entry.name.replace(/\.json$/, ''))
+            .sort();
+    }
+
     async updateSection(elderId, key, payload) {
         const normalizedElderId = normalizeElderId(elderId);
         return this.#withWriteQueue(normalizedElderId, async () => {
@@ -272,7 +281,7 @@ function normalizeMediaId(mediaId) {
     if (!normalized) {
         throw new HttpError(404, 'Media not found.', 'media_not_found');
     }
-    if (normalized.includes('..')) {
+    if (normalized.includes('..') || path.isAbsolute(normalized)) {
         throw new HttpError(404, 'Media not found.', 'media_not_found');
     }
     return normalized;

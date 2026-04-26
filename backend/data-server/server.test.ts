@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { DataStore } from './store.mjs';
 import { createDataServer } from './server.mjs';
+import { SqliteDataStore } from './sqliteStore.mjs';
 
 describe('backend/data-server', () => {
     let tempRoot: string;
@@ -221,6 +222,242 @@ describe('backend/data-server', () => {
         });
         expect(updatedElderResponse.json.elder.timeAlbum).toHaveLength(1);
         expect(updatedElderResponse.json.elder.cognitive.reports).toHaveLength(1);
+    });
+
+    it('serves bridge-compatible state, events, contexts, ui commands, and outbound record APIs', async () => {
+        const { server } = createDataServer({
+            rootDir: path.join(tempRoot, 'data'),
+            legacyStatePath: path.join(tempRoot, 'missing-legacy.json'),
+        });
+        const handler = server.listeners('request')[0];
+
+        const stateWriteResponse = await dispatch(handler, {
+            method: 'POST',
+            url: '/api/state/care-plan',
+            body: {
+                elderId: 'elder_demo',
+                payload: {
+                    items: [{ id: 'walk', title: '散步', enabled: true, time: '08:30' }],
+                    events: [],
+                    trend: { adherence: 95 },
+                },
+            },
+        });
+        expect(stateWriteResponse.statusCode).toBe(200);
+        expect(stateWriteResponse.json.state.carePlan.items).toHaveLength(1);
+
+        const eventResponse = await dispatch(handler, {
+            method: 'POST',
+            url: '/api/events',
+            body: {
+                elderId: 'elder_demo',
+                type: 'sundowning.alert',
+                severity: 'warn',
+                payload: { id: 'sun-1', level: 'medium', riskScore: 62 },
+            },
+        });
+        expect(eventResponse.statusCode).toBe(200);
+        expect(eventResponse.json.event.type).toBe('sundowning.alert');
+
+        const commandResponse = await dispatch(handler, {
+            method: 'POST',
+            url: '/api/ui/commands',
+            body: {
+                elderId: 'elder_demo',
+                command: {
+                    type: 'elder.action',
+                    timestamp: 1774770000000,
+                    payload: { action: 'open_memory_album' },
+                },
+            },
+        });
+        expect(commandResponse.statusCode).toBe(200);
+
+        const commandsResponse = await dispatch(handler, {
+            method: 'GET',
+            url: '/api/ui/commands?elderId=elder_demo&since=1774760000000',
+        });
+        expect(commandsResponse.statusCode).toBe(200);
+        expect(commandsResponse.json.commands).toHaveLength(1);
+        expect(commandsResponse.json.commands[0].type).toBe('elder.action');
+
+        const outboundResponse = await dispatch(handler, {
+            method: 'POST',
+            url: '/api/outbound/record',
+            body: {
+                elderId: 'elder_demo',
+                audience: 'guardians',
+                channel: 'frontend',
+                targets: ['ui:guardian'],
+                message: '今日照护报告已生成',
+                purpose: 'daily_report',
+                metadata: { source: 'test' },
+            },
+        });
+        expect(outboundResponse.statusCode).toBe(200);
+        expect(outboundResponse.json.state.outboundEvents[0]).toMatchObject({
+            audience: 'guardians',
+            purpose: 'daily_report',
+        });
+
+        const stateReadResponse = await dispatch(handler, {
+            method: 'GET',
+            url: '/api/state?elderId=elder_demo',
+        });
+        expect(stateReadResponse.statusCode).toBe(200);
+        expect(stateReadResponse.json.state.carePlan.trend).toMatchObject({ adherence: 95 });
+
+        const contextResponse = await dispatch(handler, {
+            method: 'GET',
+            url: '/api/context/daily-report?elderId=elder_demo',
+        });
+        expect(contextResponse.statusCode).toBe(200);
+        expect(contextResponse.json.contextType).toBe('daily-report');
+        expect(contextResponse.json.context.carePlan.upcomingItems[0]).toMatchObject({ id: 'walk' });
+        expect(contextResponse.json.context.reportAlreadySentToday).toBe(true);
+
+        const eventListResponse = await dispatch(handler, {
+            method: 'GET',
+            url: '/api/elder/events?elderId=elder_demo&type=sundowning&limit=10',
+        });
+        expect(eventListResponse.statusCode).toBe(200);
+        expect(eventListResponse.json.events).toHaveLength(1);
+        expect(eventListResponse.json.events[0].type).toBe('sundowning.alert');
+
+        const eldersResponse = await dispatch(handler, {
+            method: 'GET',
+            url: '/api/elders',
+        });
+        expect(eldersResponse.statusCode).toBe(200);
+        expect(eldersResponse.json.elderIds).toContain('elder_demo');
+    });
+
+    it('supports domain shortcut write APIs', async () => {
+        const { server } = createDataServer({
+            rootDir: path.join(tempRoot, 'data'),
+            legacyStatePath: path.join(tempRoot, 'missing-legacy.json'),
+        });
+        const handler = server.listeners('request')[0];
+
+        const logResponse = await dispatch(handler, {
+            method: 'POST',
+            url: '/api/elder/medication/logs',
+            body: {
+                elderId: 'elder_demo',
+                medicationId: 'med_1',
+                medicationName: '盐酸奥司他韦',
+                scheduledTime: '08:00',
+                status: 'taken',
+            },
+        });
+        expect(logResponse.statusCode).toBe(200);
+        expect(logResponse.json.state.medicationLogs[0]).toMatchObject({
+            medicationId: 'med_1',
+            status: 'taken',
+        });
+
+        const conversationResponse = await dispatch(handler, {
+            method: 'POST',
+            url: '/api/elder/cognitive/conversations',
+            body: {
+                elderId: 'elder_demo',
+                conversation: {
+                    id: 'conv-1',
+                    userMessage: '今天吃药了吗？',
+                    aiResponse: '已经提醒您了。',
+                    sentiment: 'neutral',
+                },
+            },
+        });
+        expect(conversationResponse.statusCode).toBe(200);
+        expect(conversationResponse.json.state.cognitive.conversations[0]).toMatchObject({ id: 'conv-1' });
+
+        const assessmentResponse = await dispatch(handler, {
+            method: 'POST',
+            url: '/api/elder/cognitive/assessments',
+            body: {
+                elderId: 'elder_demo',
+                assessment: {
+                    id: 'assess-1',
+                    score: 1,
+                    maxScore: 5,
+                },
+            },
+        });
+        expect(assessmentResponse.statusCode).toBe(200);
+        expect(assessmentResponse.json.event.severity).toBe('warn');
+
+        const careEventResponse = await dispatch(handler, {
+            method: 'POST',
+            url: '/api/elder/care-plan/events',
+            body: {
+                elderId: 'elder_demo',
+                event: {
+                    id: 'care-event-1',
+                    type: 'reminder_triggered',
+                    itemId: 'walk',
+                },
+            },
+        });
+        expect(careEventResponse.statusCode).toBe(200);
+        expect(careEventResponse.json.event.type).toBe('care.reminder_triggered');
+        expect(careEventResponse.json.event.severity).toBe('warn');
+    });
+
+    it('persists elder state, events, and media metadata in SQLite with JSON bootstrap migration', async () => {
+        const rootDir = path.join(tempRoot, 'sqlite-data');
+        await fs.mkdir(path.join(rootDir, 'elders'), { recursive: true });
+        await fs.writeFile(path.join(rootDir, 'elders', 'elder_demo.json'), JSON.stringify({
+            profile: { name: '张爷爷' },
+            medications: [{ id: 'med_1', name: '二甲双胍', times: ['08:00'] }],
+        }), 'utf8');
+
+        const store = new SqliteDataStore({
+            rootDir,
+            legacyStatePath: path.join(tempRoot, 'missing-legacy.json'),
+        });
+
+        await store.initialize();
+        const migrated = await store.getElder('elder_demo');
+        expect(migrated.profile).toMatchObject({ name: '张爷爷' });
+        expect(await store.listElders()).toContain('elder_demo');
+
+        await store.updateSection('elder_demo', 'health', {
+            metrics: { heartRate: 76 },
+            alerts: [],
+        });
+        const { event } = await store.appendEvent('elder_demo', {
+            type: 'medication.reminder',
+            severity: 'warn',
+            payload: {
+                medicationId: 'med_1',
+                reminder: { medicationId: 'med_1', scheduledTime: '08:00' },
+            },
+        });
+        expect(event.type).toBe('medication.reminder');
+
+        const eventLog = await store.readEventLog('elder_demo');
+        expect(eventLog).toHaveLength(1);
+        expect(eventLog[0].type).toBe('medication.reminder');
+
+        const upload = await store.uploadMedia({
+            elderId: 'elder_demo',
+            type: 'faces',
+            filename: 'face.png',
+            mimeType: 'image/png',
+            contentBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0ysAAAAASUVORK5CYII=',
+        }, 'http://127.0.0.1:4328');
+        expect(upload.mediaId).toContain('elder_demo/faces/');
+        await fs.access(store.resolveMediaPath(upload.mediaId));
+
+        const db = store.db;
+        const schemaRows = db.prepare('SELECT version FROM schema_migrations').all();
+        const eventRows = db.prepare('SELECT elder_id AS elderId, type FROM events').all();
+        const mediaRows = db.prepare('SELECT elder_id AS elderId, media_id AS mediaId FROM media').all();
+        expect(schemaRows.map((row: any) => row.version)).toContain(1);
+        expect(eventRows[0]).toMatchObject({ elderId: 'elder_demo', type: 'medication.reminder' });
+        expect(mediaRows[0].mediaId).toBe(upload.mediaId);
+        store.close();
     });
 
     it('returns 400 for unsupported sections and invalid uploads', async () => {

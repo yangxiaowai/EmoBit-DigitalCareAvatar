@@ -180,16 +180,28 @@ export function applyStateUpdate(elder, key, payload) {
             elder.memoryAnchors = toLimitedArray(resolvePayloadValue(payload), MAX_RECENT_ITEMS);
             return;
         case 'memoryevents':
-            elder.memoryEvents = toLimitedArray(resolvePayloadValue(payload), MAX_EVENTS);
+            elder.memoryEvents = applyCollectionUpdate(
+                elder.memoryEvents,
+                payload,
+                MAX_EVENTS,
+            );
             return;
         case 'medications':
             elder.medications = toLimitedArray(resolvePayloadValue(payload), MAX_RECENT_ITEMS);
             return;
         case 'medicationlogs':
-            elder.medicationLogs = toLimitedArray(resolvePayloadValue(payload), MAX_EVENTS);
+            elder.medicationLogs = applyCollectionUpdate(
+                elder.medicationLogs,
+                payload,
+                MAX_EVENTS,
+            );
             return;
         case 'medicationevents':
-            elder.medicationEvents = toLimitedArray(resolvePayloadValue(payload), MAX_EVENTS);
+            elder.medicationEvents = applyCollectionUpdate(
+                elder.medicationEvents,
+                payload,
+                MAX_EVENTS,
+            );
             return;
         case 'activereminder':
             elder.activeReminder = serialize(resolvePayloadValue(payload));

@@ -21,6 +21,8 @@ node backend/data-server/server.mjs
 | `EMOBIT_DATA_SERVER_HOST` | `0.0.0.0` | 监听地址 |
 | `EMOBIT_DATA_SERVER_PORT` | `4328` | 监听端口 |
 | `EMOBIT_DATA_SERVER_ROOT` | `backend/data-server/data` | 数据存储根目录 |
+| `EMOBIT_DATA_SERVER_STORAGE` | `sqlite` | 存储引擎，支持 `sqlite` 和兼容回退 `json` |
+| `EMOBIT_DATA_SERVER_DB_PATH` | `backend/data-server/data/emobit-data.sqlite` | SQLite 数据库文件路径 |
 | `EMOBIT_DATA_SERVER_PUBLIC_BASE_URL` | (空) | 媒体文件公开 URL 前缀 |
 | `EMOBIT_ELDER_ID` | `elder_demo` | 默认老人 ID |
 
@@ -31,6 +33,75 @@ curl http://127.0.0.1:4328/healthz
 
 curl "http://127.0.0.1:4328/api/elder?elderId=elder_demo"
 # 期望: {"ok":true,"elderId":"elder_demo","elder":{...完整 elder 结构}}
+```
+
+### Data Backend 服务接口
+
+Data Backend 可以作为独立后端直接服务前端、Android、本地脚本和 Bridge。核心接口如下：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/healthz` | 健康检查，返回数据目录与老人数量 |
+| `GET` | `/api/elders` | 列出已持久化的老人 ID |
+| `GET` | `/api/elder?elderId=elder_demo` | 读取完整老人状态 |
+| `GET` | `/api/state?elderId=elder_demo` | Bridge 兼容的完整状态读取 |
+| `POST` | `/api/elder/state/:section` | 更新指定状态分区 |
+| `POST` | `/api/state/:section` | Bridge 兼容的状态分区更新 |
+| `POST` | `/api/elder/events` | 追加照护事件并同步派生分区 |
+| `POST` | `/api/events` | Bridge 兼容的事件追加 |
+| `GET` | `/api/elder/events?elderId=elder_demo&type=sundowning&limit=50` | 查询事件日志，支持类型前缀过滤 |
+| `GET` | `/api/context/:type?elderId=elder_demo` | 读取聚合上下文，支持 `wandering`、`medication`、`daily-report`、`sundowning`、`care-plan`、`trends`、`family-control` |
+| `GET` | `/api/elder/context/:type?elderId=elder_demo` | 与上方等价的老人语义路径 |
+| `GET` | `/api/ui/commands?elderId=elder_demo&since=0` | 查询 OpenClaw/家属控制下发给老人端的 UI 指令 |
+| `POST` | `/api/ui/commands` | 追加 UI 指令 |
+| `POST` | `/api/outbound/record` | 记录通知家属、通知老人、语音外呼等出站动作 |
+| `POST` | `/api/media/upload` | 上传 base64 媒体并返回 `/media/...` URL |
+| `GET` | `/media/:mediaId` | 读取已上传媒体 |
+
+常用业务快捷写入接口：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `POST` | `/api/elder/medication/logs` | 追加用药记录 |
+| `POST` | `/api/elder/cognitive/conversations` | 追加认知/陪伴对话事件 |
+| `POST` | `/api/elder/cognitive/assessments` | 追加认知测评事件，低分自动标记 `warn` |
+| `POST` | `/api/elder/care-plan/events` | 追加照护计划事件 |
+
+示例：
+
+```bash
+curl -X POST http://127.0.0.1:4328/api/elder/medication/logs \
+  -H "Content-Type: application/json" \
+  -d '{"elderId":"elder_demo","medicationId":"med_1","medicationName":"盐酸奥司他韦","scheduledTime":"08:00","status":"taken"}'
+
+curl "http://127.0.0.1:4328/api/context/daily-report?elderId=elder_demo"
+```
+
+### 数据库设计
+
+Node Data Backend 默认使用 SQLite，启动时自动创建数据库文件和表结构；如果已有旧版 JSON 数据，会从 `backend/data-server/data/elders/*.json` 与 `openclaw/bridge/data/state.json` 自动引导迁移到 SQLite。媒体二进制仍存放在 `uploads/` 目录，数据库保存索引与元数据。
+
+| 表 | 关键字段 | 用途 |
+|---|---|---|
+| `schema_migrations` | `version`, `applied_at` | 记录数据库 schema 版本 |
+| `elder_state` | `elder_id`, `updated_at`, `state_json` | 老人完整状态快照，供前端、Bridge、Android 同步 |
+| `events` | `event_id`, `elder_id`, `type`, `severity`, `timestamp_ms`, `payload_json`, `event_json` | 照护事件流水，支持按老人、时间、事件类型索引 |
+| `media` | `media_id`, `elder_id`, `type`, `mime_type`, `size_bytes`, `relative_path`, `url` | 人脸、相册、语音等媒体文件索引 |
+
+索引设计：
+
+| 索引 | 说明 |
+|---|---|
+| `idx_events_elder_id` | 按老人查询事件 |
+| `idx_events_elder_timestamp` | 按老人和时间查询时间线 |
+| `idx_events_elder_type` | 按老人和事件类型查询风险/业务事件 |
+| `idx_media_elder_id` | 按老人查询媒体 |
+| `idx_media_elder_type` | 按老人和媒体类型查询人脸、相册、语音 |
+
+如需临时回退到旧 JSON 存储：
+
+```bash
+EMOBIT_DATA_SERVER_STORAGE=json node backend/data-server/server.mjs
 ```
 
 ---
