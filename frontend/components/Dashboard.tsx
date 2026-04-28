@@ -182,6 +182,7 @@ const LocationTabContent: React.FC<LocationTabContentProps> = ({
     const STATIC_MAP_ZOOM = 16;
     const STATIC_MAP_W = 800;
     const STATIC_MAP_H = 400;
+    const mapAuditNo = import.meta.env.VITE_AMAP_AUDIT_NO?.trim();
     const toPx = (lng: number, lat: number) =>
         mapService.latLngToStaticMapPx(lng, lat, staticMapCenter.lng, staticMapCenter.lat, STATIC_MAP_ZOOM, STATIC_MAP_W, STATIC_MAP_H);
     const currentPos = historyData.length > 0 && historyData[historyIndex]
@@ -235,6 +236,11 @@ const LocationTabContent: React.FC<LocationTabContentProps> = ({
                                 </svg>
                             </div>
                         </>
+                    ) : null}
+                    {mapAuditNo ? (
+                        <div className="absolute right-2 top-2 z-[350] px-1.5 py-0.5 rounded bg-black/40 text-white/90 text-[10px] leading-none pointer-events-none">
+                            审图号：{mapAuditNo}
+                        </div>
                     ) : null}
                 </div>
                 <div className="absolute top-4 left-4 z-[400] bg-white/90 backdrop-blur-sm p-2 rounded-lg shadow-sm border border-slate-200">
@@ -2365,6 +2371,7 @@ const DashboardFaceAlbumTab: React.FC<{ onBack?: () => void }> = ({ onBack }) =>
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
+    const mapAuditNo = import.meta.env.VITE_AMAP_AUDIT_NO?.trim();
     const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
     const [greeting, setGreeting] = useState<string>('');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -3548,6 +3555,11 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
                 <div className="relative h-44 bg-slate-100 rounded-[2rem] overflow-hidden">
                     {/* Real Amap Container */}
                     <div id="overview-map-container" ref={overviewMapContainerRef} className="w-full h-full"></div>
+                    {mapAuditNo ? (
+                        <div className="absolute right-2 top-2 z-[200] px-1.5 py-0.5 rounded bg-black/40 text-white/90 text-[10px] leading-none pointer-events-none">
+                            审图号：{mapAuditNo}
+                        </div>
+                    ) : null}
 
                     {/* Radar Pulse Effect */}
                     <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">

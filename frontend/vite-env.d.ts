@@ -8,6 +8,7 @@ interface ImportMetaEnv {
   readonly VITE_AMAP_JS_KEY: string;
   readonly VITE_AMAP_SECURITY_CODE: string;
   readonly VITE_AMAP_WEB_KEY: string;
+  readonly VITE_AMAP_AUDIT_NO?: string;
   readonly VITE_FUNASR_WS_URL: string;
 }
 
