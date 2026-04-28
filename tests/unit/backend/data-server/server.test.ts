@@ -134,9 +134,12 @@ describe('backend/data-server', () => {
     });
 
     it('serves elder APIs and uploaded media over the request handler', async () => {
-        const { server } = createDataServer({
+        const store = new DataStore({
             rootDir: path.join(tempRoot, 'data'),
             legacyStatePath: path.join(tempRoot, 'missing-legacy.json'),
+        });
+        const { server } = createDataServer({
+            store,
         });
         const handler = server.listeners('request')[0];
 
@@ -225,9 +228,12 @@ describe('backend/data-server', () => {
     });
 
     it('serves bridge-compatible state, events, contexts, ui commands, and outbound record APIs', async () => {
-        const { server } = createDataServer({
+        const store = new DataStore({
             rootDir: path.join(tempRoot, 'data'),
             legacyStatePath: path.join(tempRoot, 'missing-legacy.json'),
+        });
+        const { server } = createDataServer({
+            store,
         });
         const handler = server.listeners('request')[0];
 
@@ -333,9 +339,12 @@ describe('backend/data-server', () => {
     });
 
     it('supports domain shortcut write APIs', async () => {
-        const { server } = createDataServer({
+        const store = new DataStore({
             rootDir: path.join(tempRoot, 'data'),
             legacyStatePath: path.join(tempRoot, 'missing-legacy.json'),
+        });
+        const { server } = createDataServer({
+            store,
         });
         const handler = server.listeners('request')[0];
 
@@ -499,9 +508,12 @@ describe('backend/data-server', () => {
     });
 
     it('returns 400 for unsupported sections and invalid uploads', async () => {
-        const { server } = createDataServer({
+        const store = new DataStore({
             rootDir: path.join(tempRoot, 'data'),
             legacyStatePath: path.join(tempRoot, 'missing-legacy.json'),
+        });
+        const { server } = createDataServer({
+            store,
         });
         const handler = server.listeners('request')[0];
 

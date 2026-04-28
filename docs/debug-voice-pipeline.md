@@ -26,10 +26,10 @@
 
 - [ ] AI 服务是否返回响应？
   - 应该看到：`[ElderlyApp] ✅ AI 服务响应: {text: "...", ...}`
-  - 应该看到：`[AI] Gemini 回复: "..."` 或 `[AI] 使用本地回复`
+  - 应该看到：`[AI] ✅ DeepSeek API 回复: "..."` 或 `[AI] 使用本地回复`
 
-- [ ] 如果使用 Groq API，是否配置了 API Key？
-  - 检查：`localStorage.getItem('emobit_groq_key')`
+- [ ] 如果使用 DeepSeek API，是否配置了 API Key？
+  - 检查：`localStorage.getItem('emobit_llm_key')`
   - 如果没有，会使用本地回复（也能工作）
 
 ### 步骤 3: 语音合成 (TTS)

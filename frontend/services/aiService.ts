@@ -89,8 +89,8 @@ class AIService {
     private maxHistoryLength = 20;
 
     constructor() {
-        // 从环境变量加载 API Key（优先 DeepSeek，兼容旧 Groq 变量）
-        this.apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY || import.meta.env.VITE_GROQ_API_KEY || '';
+        // 从环境变量加载国产大模型 API Key（默认 DeepSeek）
+        this.apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY || '';
         // 加载老人档案
         this.loadProfile();
     }
@@ -105,8 +105,6 @@ class AIService {
     setApiKey(key: string): void {
         this.apiKey = key;
         localStorage.setItem('emobit_llm_key', key);
-        // 兼容旧版本读取逻辑
-        localStorage.setItem('emobit_groq_key', key);
     }
 
     /**
@@ -115,7 +113,6 @@ class AIService {
     getApiKey(): string {
         if (!this.apiKey) {
             this.apiKey = localStorage.getItem('emobit_llm_key')
-                || localStorage.getItem('emobit_groq_key')
                 || '';
         }
         return this.apiKey;
@@ -403,7 +400,7 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
     }
 
     /**
-     * 调用 DeepSeek API（OpenAI 兼容格式）
+     * 调用 DeepSeek API（兼容 Chat Completions 格式）
      */
     private async callDeepSeekAPI(userMessage: string): Promise<AIResponse> {
         const apiKey = this.getApiKey();
@@ -411,7 +408,7 @@ ${nextMed ? `下次应服药：${nextMed.medication.name}，时间 ${nextMed.tim
 
         const url = 'https://api.deepseek.com/chat/completions';
 
-        // 构建 OpenAI 格式的消息
+        // 构建 Chat Completions 格式的消息
         const messages = [
             {
                 role: 'system',

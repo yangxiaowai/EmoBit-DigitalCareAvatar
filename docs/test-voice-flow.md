@@ -73,7 +73,7 @@ python scripts/edge_tts_server.py
    - 检查是否有错误信息
 
 3. **停在 `[AI] 收到用户消息`**：
-   - 检查是否看到 `[AI] ✅ 使用本地回复` 或 `[AI] Gemini 回复`
+   - 检查是否看到 `[AI] ✅ 使用本地回复` 或 `[AI] ✅ DeepSeek API 回复`
    - 检查是否有错误信息
 
 4. **停在 `[ElderlyApp] ✅ AI 服务调用成功`**：

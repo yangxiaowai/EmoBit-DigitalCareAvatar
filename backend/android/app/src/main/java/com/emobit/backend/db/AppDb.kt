@@ -8,13 +8,18 @@ import androidx.room.RoomDatabase
         ElderStateEntity::class,
         EventEntity::class,
         MediaEntity::class,
+        LocalElderProfileEntity::class,
+        LocalGuardianContactEntity::class,
+        LocalMedicationCacheEntity::class,
+        LocalClientSettingEntity::class,
+        LocalSyncStateEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AppDb : RoomDatabase() {
     abstract fun elderDao(): ElderDao
     abstract fun eventDao(): EventDao
     abstract fun mediaDao(): MediaDao
+    abstract fun localProjectionDao(): LocalProjectionDao
 }
-

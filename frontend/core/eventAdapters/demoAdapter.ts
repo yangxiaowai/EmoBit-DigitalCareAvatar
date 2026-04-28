@@ -177,7 +177,7 @@ export function createDemoAdapter(eventBus: ScenarioEventBus): DemoAdapter {
             payload: {
               log: {
                 module: 'AI_CORE',
-                message: 'Gemini Nano 模型已加载至边缘端。',
+                message: '国产端侧模型已加载至边缘端。',
                 level: 'info',
               },
             },

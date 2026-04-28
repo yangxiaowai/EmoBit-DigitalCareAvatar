@@ -5,7 +5,19 @@ import androidx.room.Room
 import com.emobit.backend.db.AppDb
 import com.emobit.backend.db.ElderStateEntity
 import com.emobit.backend.db.EventEntity
+import com.emobit.backend.db.LocalClientSettingEntity
+import com.emobit.backend.db.LocalElderProfileEntity
+import com.emobit.backend.db.LocalGuardianContactEntity
+import com.emobit.backend.db.LocalMedicationCacheEntity
+import com.emobit.backend.db.LocalSyncStateEntity
 import com.emobit.backend.db.MediaEntity
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.security.MessageDigest
 import java.time.Instant
@@ -32,6 +44,7 @@ class Storage(private val context: Context) {
                 stateJson = defaultJson,
             ),
         )
+        cacheLocalProjection(elderId, defaultJson, now)
         return defaultJson
     }
 
@@ -44,6 +57,7 @@ class Storage(private val context: Context) {
                 stateJson = stateJson,
             ),
         )
+        cacheLocalProjection(elderId, stateJson, now)
     }
 
     suspend fun appendEvent(
@@ -134,6 +148,7 @@ class Storage(private val context: Context) {
               "cognitive": { "conversations": [], "assessments": [], "reports": [] },
               "carePlan": { "items": [], "events": [], "trend": null },
               "locationAutomation": { "state": null, "events": [] },
+              "appShell": { "activeView": "dashboard", "simulation": "NONE", "systemStatus": "NORMAL", "elderMessage": null, "elderAction": null, "updatedAt": ${jsonString(nowIso)} },
               "faces": [],
               "faceEvents": [],
               "timeAlbum": [],
@@ -147,6 +162,98 @@ class Storage(private val context: Context) {
     }
 
     private fun jsonString(value: String): String = "\"" + value.replace("\"", "\\\"") + "\""
+
+    private suspend fun cacheLocalProjection(elderId: String, stateJson: String, updatedAt: String) {
+        val state = parseJsonObjectOrNull(stateJson) ?: JsonObject(emptyMap())
+        val profile = state["profile"] as? JsonObject ?: JsonObject(emptyMap())
+
+        db.localProjectionDao().upsertElderProfile(
+            LocalElderProfileEntity(
+                elderId = elderId,
+                name = profile.stringOrNull("name"),
+                nickname = profile.stringOrNull("nickname"),
+                age = profile["age"]?.jsonPrimitive?.intOrNull,
+                gender = profile.stringOrNull("gender"),
+                homeAddress = profile.stringOrNull("homeAddress"),
+                profileJson = Json.encodeToString(JsonObject.serializer(), profile),
+                updatedAt = updatedAt,
+                syncStatus = "synced",
+            ),
+        )
+
+        val guardianContacts = (state["guardianContacts"] as? JsonArray)
+            ?.mapIndexed { index, item ->
+                val contact = item as? JsonObject ?: JsonObject(emptyMap())
+                LocalGuardianContactEntity(
+                    elderId = elderId,
+                    contactId = contact.stringOrNull("id") ?: "guardian_$index",
+                    name = contact.stringOrNull("name"),
+                    relation = contact.stringOrNull("relation"),
+                    phone = contact.stringOrNull("phone"),
+                    channel = contact.stringOrNull("channel"),
+                    target = contact.stringOrNull("target"),
+                    priority = contact["priority"]?.jsonPrimitive?.intOrNull,
+                    notificationEnabled = contact["notificationEnabled"]?.jsonPrimitive?.contentOrNull != "false",
+                    settingsJson = Json.encodeToString(JsonElement.serializer(), item),
+                    updatedAt = updatedAt,
+                )
+            }
+            ?: emptyList()
+        db.localProjectionDao().replaceGuardianContacts(elderId, guardianContacts)
+
+        val medications = (state["medications"] as? JsonArray)
+            ?.mapIndexed { index, item ->
+                val medication = item as? JsonObject ?: JsonObject(emptyMap())
+                LocalMedicationCacheEntity(
+                    elderId = elderId,
+                    medicationId = medication.stringOrNull("id") ?: "medication_$index",
+                    name = medication.stringOrNull("name"),
+                    dosage = medication.stringOrNull("dosage"),
+                    frequency = medication.stringOrNull("frequency"),
+                    timesJson = Json.encodeToString(JsonElement.serializer(), medication["times"] ?: JsonArray(emptyList())),
+                    instructions = medication.stringOrNull("instructions"),
+                    purpose = medication.stringOrNull("purpose"),
+                    imageUrl = medication.stringOrNull("imageUrl"),
+                    medicationJson = Json.encodeToString(JsonElement.serializer(), item),
+                    updatedAt = updatedAt,
+                )
+            }
+            ?: emptyList()
+        db.localProjectionDao().replaceMedications(elderId, medications)
+
+        val appShell = state["appShell"] as? JsonObject ?: JsonObject(emptyMap())
+        db.localProjectionDao().upsertClientSetting(
+            LocalClientSettingEntity(
+                elderId = elderId,
+                clientRole = "elder",
+                settingKey = "appShell",
+                valueJson = Json.encodeToString(JsonObject.serializer(), appShell),
+                updatedAt = updatedAt,
+                dirty = false,
+            ),
+        )
+        db.localProjectionDao().upsertSyncState(
+            LocalSyncStateEntity(
+                elderId = elderId,
+                scope = "elder_state",
+                remoteUpdatedAt = state.stringOrNull("updatedAt"),
+                localUpdatedAt = updatedAt,
+                pendingChangesJson = "[]",
+            ),
+        )
+    }
+}
+
+private fun JsonObject.stringOrNull(key: String): String? {
+    return this[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+}
+
+private fun parseJsonObjectOrNull(text: String): JsonObject? {
+    return try {
+        Json.parseToJsonElement(text) as? JsonObject
+    } catch (_: Exception) {
+        null
+    }
 }
 
 private fun sha256(bytes: ByteArray): String {
@@ -171,4 +278,3 @@ private fun extensionFromFilenameOrMime(filename: String, mimeType: String): Str
         else -> ".bin"
     }
 }
-

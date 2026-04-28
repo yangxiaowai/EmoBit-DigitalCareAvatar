@@ -147,7 +147,7 @@ interface LocationTabContentProps {
     homePos: [number, number];
     /** 电子围栏半径（度，约 100m） */
     geofenceRadiusDeg: number;
-    /** 环境语义分析（Groq）：老人周边安全与地理位置描述 */
+    /** 环境语义分析（DeepSeek）：老人周边安全与地理位置描述 */
     environmentAnalysis: string;
     environmentAnalysisLoading?: boolean;
 }
@@ -367,7 +367,7 @@ const LocationTabContent: React.FC<LocationTabContentProps> = ({
                     <div className="flex gap-3">
                         <div className="w-1 bg-indigo-500 rounded-full shrink-0"></div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-xs text-slate-400 font-bold mb-1">环境语义分析 (Groq)</p>
+                            <p className="text-xs text-slate-400 font-bold mb-1">环境语义分析 (DeepSeek)</p>
                             {environmentAnalysisLoading ? (
                                 <p className="text-sm text-slate-500">分析中…</p>
                             ) : environmentAnalysis ? (
@@ -1038,7 +1038,7 @@ const DashboardSettingsView: React.FC<DashboardSettingsViewProps> = ({ onClose, 
                         </div>
                         <div>
                             <h3 className="font-bold text-lg leading-tight">AI 语音克隆</h3>
-                            <p className="text-[10px] text-indigo-100 opacity-80">Powered by Gemini Nano</p>
+                            <p className="text-[10px] text-indigo-100 opacity-80">Powered by 国产 AI</p>
                         </div>
                     </div>
 
@@ -2510,7 +2510,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
     const [locationPhotoItems, setLocationPhotoItems] = useState<{ url: string; caption?: string }[]>([]);
     /** 定位页是否使用 JS API 交互地图；null=首次进入待尝试，true=已用 JS 地图，false=已回退到静态图 */
     const [useJsMap, setUseJsMap] = useState<boolean | null>(null);
-    /** 环境语义分析（Groq）：老人周边安全与地理位置描述 */
+    /** 环境语义分析（DeepSeek）：老人周边安全与地理位置描述 */
     const [environmentAnalysis, setEnvironmentAnalysis] = useState<string>('');
     const [environmentAnalysisLoading, setEnvironmentAnalysisLoading] = useState(false);
     const environmentAnalysisReqIdRef = useRef(0);
@@ -3128,7 +3128,7 @@ const Dashboard: React.FC<DashboardProps> = ({ status, simulation, logs }) => {
         return () => { cancelled = true; };
     }, [currentLngLat.lng, currentLngLat.lat]);
 
-    // 环境语义分析（Groq）：根据当前地址与最近 3 个周边 POI 分析老人周边安全与地理位置
+    // 环境语义分析（DeepSeek）：根据当前地址与最近 3 个周边 POI 分析老人周边安全与地理位置
     useEffect(() => {
         const reqId = ++environmentAnalysisReqIdRef.current;
         setEnvironmentAnalysisLoading(true);

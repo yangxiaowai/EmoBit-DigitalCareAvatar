@@ -37,3 +37,38 @@ interface MediaDao {
     suspend fun getByMediaId(mediaId: String): MediaEntity?
 }
 
+@Dao
+interface LocalProjectionDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertElderProfile(entity: LocalElderProfileEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertGuardianContacts(entities: List<LocalGuardianContactEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertMedications(entities: List<LocalMedicationCacheEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertClientSetting(entity: LocalClientSettingEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSyncState(entity: LocalSyncStateEntity)
+
+    @Query("DELETE FROM local_guardian_contacts WHERE elderId = :elderId")
+    suspend fun deleteGuardianContacts(elderId: String)
+
+    @Query("DELETE FROM local_medication_cache WHERE elderId = :elderId")
+    suspend fun deleteMedications(elderId: String)
+
+    @Transaction
+    suspend fun replaceGuardianContacts(elderId: String, entities: List<LocalGuardianContactEntity>) {
+        deleteGuardianContacts(elderId)
+        if (entities.isNotEmpty()) upsertGuardianContacts(entities)
+    }
+
+    @Transaction
+    suspend fun replaceMedications(elderId: String, entities: List<LocalMedicationCacheEntity>) {
+        deleteMedications(elderId)
+        if (entities.isNotEmpty()) upsertMedications(entities)
+    }
+}

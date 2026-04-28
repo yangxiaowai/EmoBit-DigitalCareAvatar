@@ -32,7 +32,6 @@ describe('aiService guardian report contract', () => {
     vi.unstubAllEnvs();
     vi.resetModules();
     // 强制走本地分支，避免受 .env 中真实模型 Key 影响导致网络调用超时
-    vi.stubEnv('VITE_GROQ_API_KEY', '');
     vi.stubEnv('VITE_LLM_API_KEY', '');
     vi.stubEnv('VITE_SPARK_API_KEY', '');
     vi.stubEnv('VITE_TONGYI_API_KEY', '');
@@ -73,7 +72,7 @@ describe('aiService guardian report contract', () => {
     vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
 
     const { aiService } = await import('@/services/aiService');
-    aiService.setApiKey('test-groq-key');
+    aiService.setApiKey('test-deepseek-key');
 
     const report = await aiService.generateGuardianDailyReport(
       { bpm: 78, pressure: '126/82', sleep: 7.2 },
@@ -89,4 +88,3 @@ describe('aiService guardian report contract', () => {
     expect(userPrompt).toContain('"indicators"');
   });
 });
-

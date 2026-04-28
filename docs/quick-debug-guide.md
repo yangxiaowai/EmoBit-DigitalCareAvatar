@@ -79,7 +79,7 @@
 **原因**：AI 服务返回空响应
 
 **检查**：
-- 是否看到 `[AI] ✅ 使用本地回复` 或 `[AI] Gemini 回复`？
+- 是否看到 `[AI] ✅ 使用本地回复` 或 `[AI] ✅ DeepSeek API 回复`？
 - 查看 `[ElderlyApp] ✅ AI 服务响应` 的内容
 
 **解决**：
@@ -121,7 +121,7 @@ aiService.chat('你好').then(response => {
 - [ ] 看到 `[FunASR] ✅ 最终结果`
 - [ ] 看到 `[ElderlyApp] ✅ 最终识别结果`
 - [ ] 看到 `[AI] 收到用户消息`
-- [ ] 看到 `[AI] ✅ 使用本地回复` 或 `[AI] Gemini 回复`
+- [ ] 看到 `[AI] ✅ 使用本地回复` 或 `[AI] ✅ DeepSeek API 回复`
 - [ ] 看到 `[ElderlyApp] ✅ AI 服务调用成功`
 - [ ] 看到 `[VoiceService] 播放语音`
 - [ ] Edge TTS 服务正在运行（如果显示不可用）

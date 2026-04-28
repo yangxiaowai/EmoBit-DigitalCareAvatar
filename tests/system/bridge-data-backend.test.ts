@@ -26,9 +26,12 @@ describe('system/bridge-data-backend integration', () => {
     beforeAll(async () => {
         tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'emobit-bridge-integration-'));
 
-        const { server, store } = createDataServer({
+        const fileStore = new DataStore({
             rootDir: path.join(tempRoot, 'data'),
             legacyStatePath: path.join(tempRoot, 'missing-legacy.json'),
+        });
+        const { server, store } = createDataServer({
+            store: fileStore,
         });
         await store.initialize();
 

@@ -50,12 +50,27 @@ backend/
 
 ### 服务端存储
 
-`backend/data-server/` 是服务端数据后端，生产/服务器部署推荐使用 PostgreSQL：
+`backend/data-server/` 是服务端数据后端，服务端主存储统一使用 PostgreSQL。SQLite/JSON 不再作为服务端运行时存储，只保留为端侧存储或历史迁移来源。
 
 ```text
 PostgreSQL
 ├── schema_migrations      # schema 版本
-├── elder_state            # 老人状态 JSONB 快照，事务行锁保护并发写
+├── elder_state            # 老人完整状态 JSONB 快照，保持 API 同步契约
+├── elders                 # 多老人主表，提取姓名、年龄、地址等基础检索字段
+├── elder_guardian_contacts
+├── elder_memory_anchors
+├── elder_safe_zones
+├── elder_medications
+├── elder_medication_logs
+├── elder_health_snapshots
+├── elder_cognitive_records
+├── elder_care_plan_items / elder_care_plan_events / elder_care_plan_trends
+├── elder_wandering_state
+├── elder_sundowning_state / elder_sundowning_events
+├── elder_app_shell
+├── elder_faces / elder_time_album_items
+├── elder_ui_commands
+├── elder_outbound_events
 ├── events                 # 照护事件流水
 └── media                  # 媒体索引与元数据
 ```
@@ -63,18 +78,16 @@ PostgreSQL
 服务端配置方式：
 
 ```bash
-EMOBIT_DATA_SERVER_STORAGE=postgres
 EMOBIT_POSTGRES_URL=postgres://emobit:password@host:5432/emobit
 EMOBIT_POSTGRES_POOL_MAX=20
 ```
 
-未配置 PostgreSQL 时，本机开发和演示默认使用 SQLite：
+旧 JSON/NDJSON 数据只作为迁移种子：
 
 ```text
 backend/data-server/data/
-├── emobit-data.sqlite     # 默认 SQLite 数据库
-├── elders/                # 旧 JSON 状态快照/迁移种子
-├── events/                # 旧 NDJSON 事件日志/兼容日志
+├── elders/                # 旧 JSON 状态快照，启动或迁移脚本导入 PostgreSQL
+├── events/                # 旧 NDJSON 事件日志，启动或迁移脚本导入 PostgreSQL
 └── uploads/               # 媒体文件托管目录
 ```
 
@@ -85,7 +98,7 @@ backend/data-server/data/
 - 媒体元数据
 - 上传文件托管
 
-可通过 `EMOBIT_DATA_SERVER_STORAGE=sqlite` 显式使用本机 SQLite，也可通过 `EMOBIT_DATA_SERVER_STORAGE=json` 回退旧 JSON 文件存储。
+可通过 `npm run data-server:migrate-json` 显式执行旧 JSON 到 PostgreSQL 的迁移。
 
 ### 本机/边缘存储
 
@@ -97,7 +110,7 @@ backend/bridge/data/state.json
 
 该文件定位为本机运行缓存和历史兼容数据源，不作为服务端主数据库。Data Backend 启动时可将它作为旧数据迁移来源。
 
-`backend/android/` 是 Android 设备侧本机后端，使用 Room/SQLite 管理端侧本地数据。
+`backend/android/` 是 Android 设备侧本机后端，使用 Room/SQLite 管理端侧本地数据。端侧 SQLite 表包括完整状态缓存、老人资料、家属联系人设置、药物缓存、端侧设置、同步状态、事件和媒体索引。
 
 ## 测试
 

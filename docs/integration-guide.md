@@ -21,11 +21,10 @@ node backend/data-server/server.mjs
 | `EMOBIT_DATA_SERVER_HOST` | `0.0.0.0` | 监听地址 |
 | `EMOBIT_DATA_SERVER_PORT` | `4328` | 监听端口 |
 | `EMOBIT_DATA_SERVER_ROOT` | `backend/data-server/data` | 数据存储根目录 |
-| `EMOBIT_DATA_SERVER_STORAGE` | 自动选择 | 存储引擎。服务端推荐 `postgres`；未配置 PostgreSQL 时默认 `sqlite`；兼容回退 `json` |
-| `EMOBIT_POSTGRES_URL` / `DATABASE_URL` | (空) | PostgreSQL 连接串。存在时默认启用 `postgres` 存储 |
+| `EMOBIT_DATA_SERVER_STORAGE` | `postgres` | 服务端存储固定为 PostgreSQL；设置为其他值会拒绝启动 |
+| `EMOBIT_POSTGRES_URL` / `DATABASE_URL` | (空) | PostgreSQL 连接串，服务端启动必需 |
 | `EMOBIT_POSTGRES_POOL_MAX` | `20` | PostgreSQL 连接池最大连接数 |
 | `EMOBIT_POSTGRES_SSL` | (空) | PostgreSQL SSL 开关，设为 `true` 时使用 `rejectUnauthorized:false` |
-| `EMOBIT_DATA_SERVER_DB_PATH` | `backend/data-server/data/emobit-data.sqlite` | SQLite 数据库文件路径 |
 | `EMOBIT_DATA_SERVER_PUBLIC_BASE_URL` | (空) | 媒体文件公开 URL 前缀 |
 | `EMOBIT_ELDER_ID` | `elder_demo` | 默认老人 ID |
 
@@ -82,7 +81,7 @@ curl "http://127.0.0.1:4328/api/context/daily-report?elderId=elder_demo"
 
 ### 数据库设计
 
-Node Data Backend 的服务端主库推荐使用 PostgreSQL。配置 `EMOBIT_POSTGRES_URL` 或 `DATABASE_URL` 后，服务会自动选择 PostgreSQL；也可以显式设置 `EMOBIT_DATA_SERVER_STORAGE=postgres`。未配置 PostgreSQL 时，本机演示默认使用 SQLite；JSON 仅作为兼容回退和历史数据迁移来源。
+Node Data Backend 的服务端主库统一使用 PostgreSQL。SQLite/JSON 不再作为服务端运行时存储；JSON/NDJSON 仅作为历史数据迁移来源，SQLite 用于 Android/端侧本地缓存。
 
 PostgreSQL 写路径使用连接池、事务和单老人状态行级锁：
 
@@ -94,17 +93,35 @@ PostgreSQL 写路径使用连接池、事务和单老人状态行级锁：
 启动示例：
 
 ```bash
-EMOBIT_DATA_SERVER_STORAGE=postgres \
 EMOBIT_POSTGRES_URL="postgres://emobit:password@127.0.0.1:5432/emobit" \
 node backend/data-server/server.mjs
 ```
 
-如果已有旧版 JSON 数据，会从 `backend/data-server/data/elders/*.json` 与 `backend/bridge/data/state.json` 自动引导迁移到当前存储引擎。媒体二进制仍存放在 `uploads/` 目录，数据库保存索引与元数据。
+如果已有旧版 JSON 数据，会从 `backend/data-server/data/elders/*.json` 与 `backend/bridge/data/state.json` 自动引导迁移到 PostgreSQL；`backend/data-server/data/events/*.ndjson` 会迁移为事件流水。也可以显式执行：
+
+```bash
+npm run data-server:migrate-json
+```
+
+媒体二进制仍存放在 `uploads/` 目录，数据库保存索引与元数据。
 
 | 表 | 关键字段 | 用途 |
 |---|---|---|
 | `schema_migrations` | `version`, `applied_at` | 记录数据库 schema 版本 |
+| `elders` | `elder_id`, `name`, `nickname`, `age`, `gender`, `home_address`, `profile_json` | 多老人主表和基础检索字段 |
 | `elder_state` | `elder_id`, `updated_at`, `state_json JSONB` | 老人完整状态快照，供前端、Bridge、Android 同步 |
+| `elder_guardian_contacts` | `elder_id`, `contact_id`, `channel`, `target`, `priority`, `contact_json` | 家属联系人与通知路由 |
+| `elder_memory_anchors` / `elder_safe_zones` | 经纬度、半径、业务 JSON | 记忆锚点与安全区域 |
+| `elder_medications` / `elder_medication_logs` | 药品、时间、状态、业务 JSON | 用药计划和服药记录 |
+| `elder_health_snapshots` | `metrics_json`, `alerts_json` | 最新健康指标与告警 |
+| `elder_cognitive_records` | `record_type`, `score`, `sentiment`, `record_json` | 陪伴对话、认知测评和报告 |
+| `elder_care_plan_items` / `elder_care_plan_events` / `elder_care_plan_trends` | 照护计划、执行事件、趋势 JSON | 照护计划管理 |
+| `elder_wandering_state` | 走失状态、置信度、距离、安全区状态 | 走失风险当前状态 |
+| `elder_sundowning_state` / `elder_sundowning_events` | 风险分数、等级、干预记录 | 黄昏综合征监测 |
+| `elder_app_shell` | 前端视图、模拟场景、系统状态 | 前端刷新恢复和演示状态 |
+| `elder_faces` / `elder_time_album_items` | 人脸和相册条目 | 家庭识别与时光相册 |
+| `elder_ui_commands` | 指令类型、时间、payload | 家属端/OpenClaw 下发给老人端的 UI 指令 |
+| `elder_outbound_events` | 受众、渠道、用途、结果 | 通知家属/老人/外呼记录 |
 | `events` | `event_id`, `elder_id`, `type`, `severity`, `timestamp_ms`, `payload_json JSONB`, `event_json JSONB` | 照护事件流水，支持按老人、时间、事件类型索引 |
 | `media` | `media_id`, `elder_id`, `type`, `mime_type`, `size_bytes`, `relative_path`, `url` | 人脸、相册、语音等媒体文件索引 |
 
@@ -112,18 +129,10 @@ node backend/data-server/server.mjs
 
 | 索引 | 说明 |
 |---|---|
-| `idx_events_elder_id` | 按老人查询事件 |
-| `idx_events_elder_timestamp` | 按老人和时间查询时间线 |
-| `idx_events_elder_type` | 按老人和事件类型查询风险/业务事件 |
-| `idx_media_elder_id` | 按老人查询媒体 |
-| `idx_media_elder_type` | 按老人和媒体类型查询人脸、相册、语音 |
-
-如需本机演示或临时回退：
-
-```bash
-EMOBIT_DATA_SERVER_STORAGE=sqlite node backend/data-server/server.mjs
-EMOBIT_DATA_SERVER_STORAGE=json node backend/data-server/server.mjs
-```
+| `idx_events_elder_id` / `idx_events_elder_timestamp` / `idx_events_elder_type` | 按老人、时间线、事件类型查询风险/业务事件 |
+| `idx_media_elder_id` / `idx_media_elder_type` | 按老人和媒体类型查询人脸、相册、语音 |
+| `idx_ui_commands_elder_time` | 查询老人端待执行 UI 指令 |
+| `idx_outbound_events_elder_purpose` | 查询通知/外呼历史 |
 
 ---
 
@@ -189,7 +198,7 @@ npm run dev
 |---|---|---|
 | `VITE_OPENCLAW_BRIDGE_URL` | (空) | Bridge 地址 |
 | `VITE_OPENCLAW_BRIDGE_TOKEN` | (空) | Bridge 鉴权 token |
-| `VITE_GROQ_API_KEY` | (空) | Groq LLM API Key |
+| `VITE_DEEPSEEK_API_KEY` | (空) | DeepSeek API Key |
 | `VITE_AMAP_JS_KEY` | (空) | 高德地图 JS Key |
 
 **浏览器访问：** `http://localhost:3000`

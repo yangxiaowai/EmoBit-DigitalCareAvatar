@@ -34,3 +34,18 @@ curl http://127.0.0.1:4328/healthz
 
 - SQLite（Room）：`emobit.db`（应用私有数据库目录）
 - 媒体文件：`filesDir/uploads/…`
+
+## SQLite 表设计
+
+Android 端 SQLite 定位为老人端/家属端本地缓存和离线设置，不作为服务端主库。核心表：
+
+| 表 | 用途 |
+|---|---|
+| `elder_state` | 完整 elder 状态缓存，用于离线恢复和与服务端同步 |
+| `local_elder_profiles` | 老人基础资料缓存 |
+| `local_guardian_contacts` | 家属联系人、通知渠道和本地通知开关 |
+| `local_medication_cache` | 老人端必要药物信息缓存 |
+| `local_client_settings` | 老人端/家属端本地设置 |
+| `local_sync_state` | 端云同步状态和待同步变更 |
+| `events` | 端侧事件缓存 |
+| `media` | 端侧媒体索引 |
